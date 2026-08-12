@@ -13,68 +13,49 @@ import {
   getStorage,
 } from "firebase/storage";
 
-
 // ======================================================
 // FIREBASE CONFIGURATION
 // ======================================================
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBP7ojqfIaVFKV4W6zhsgUc4RKzoVY-1-o",
-  authDomain:
-    "online-academy-c7d72.firebaseapp.com",
-  projectId:
-    "online-academy-c7d72",
-  storageBucket:
-    "online-academy-c7d72.firebasestorage.app",
-  messagingSenderId:
-    "768727735008",
-  appId:
-    "1:768727735008:web:f072001fa6ad20d8ff0e85",
-  measurementId:
-    "G-760K4C8F5G",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
-
 
 // ======================================================
 // INITIALIZE FIREBASE
 // ======================================================
 
-const app = initializeApp(
-  firebaseConfig
-);
-
+const app = initializeApp(firebaseConfig);
 
 // ======================================================
 // AUTHENTICATION
 // ======================================================
 
-export const auth =
-  getAuth(app);
-
+export const auth = getAuth(app);
 
 // ======================================================
 // GOOGLE AUTH
 // ======================================================
 
-export const googleProvider =
-  new GoogleAuthProvider();
-
+export const googleProvider = new GoogleAuthProvider();
 
 // ======================================================
 // FIRESTORE
 // ======================================================
 
-export const db =
-  getFirestore(app);
-
+export const db = getFirestore(app);
 
 // ======================================================
 // FIREBASE STORAGE
 // ======================================================
 
-export const storage =
-  getStorage(app);
-
+export const storage = getStorage(app);
 
 // ======================================================
 // DEFAULT EXPORT
