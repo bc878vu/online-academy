@@ -725,8 +725,8 @@ function CourseDetails() {
       </section>
 
       {/* ==================================================
-          MAIN
-      ================================================== */
+          MAIN}
+      ================================================== */}
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
         <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -751,9 +751,9 @@ function CourseDetails() {
               setPlayerError={setPlayerError}
             />
 
-            {/* ==================================================
-                ABOUT
-            ================================================== */
+          {/* ==================================================
+    CURRICULUM
+================================================== */}
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <h2 className="text-2xl font-bold text-slate-900">
@@ -767,7 +767,7 @@ function CourseDetails() {
 
             {/* ==================================================
                 CURRICULUM
-            ================================================== */
+            ================================================== */}
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <div className="flex items-center justify-between gap-4">
@@ -880,7 +880,7 @@ function CourseDetails() {
 
             {/* ==================================================
                 WHAT YOU LEARN
-            ================================================== */
+            ================================================== */ }
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <h2 className="text-2xl font-bold text-slate-900">
@@ -909,7 +909,7 @@ function CourseDetails() {
 
           {/* ==================================================
               SIDEBAR
-          ================================================== */
+          ================================================== */ }
 
           <aside className="space-y-6">
             <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
@@ -1034,7 +1034,7 @@ function CourseDetails() {
 
       {/* ==================================================
           FINAL CTA
-      ================================================== */
+      ================================================== */ }
 
       <section className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-12 text-center sm:px-6 sm:py-16">
