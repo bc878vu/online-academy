@@ -483,6 +483,19 @@ function CourseDetails() {
       ? progressMap[selectedLesson.id]
       : null;
 
+  const handleProgressSaved = useCallback(
+    (lessonId, data) => {
+      setProgressMap((previous) => ({
+        ...previous,
+        [lessonId]: {
+          ...previous[lessonId],
+          ...data,
+        },
+      }));
+    },
+    []
+  );
+
   // ------------------------------------------------------
   // Loading
   // ------------------------------------------------------
@@ -713,7 +726,7 @@ function CourseDetails() {
 
       {/* ==================================================
           MAIN
-      ================================================== */}
+      ================================================== */
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
         <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -733,22 +746,14 @@ function CourseDetails() {
                 setSelectedLessonIndex
               }
               progress={selectedProgress}
-              onProgressSaved={(lessonId, data) => {
-                setProgressMap((previous) => ({
-                  ...previous,
-                  [lessonId]: {
-                    ...previous[lessonId],
-                    ...data,
-                  },
-                }));
-              }}
+              onProgressSaved={handleProgressSaved}
               playerError={playerError}
               setPlayerError={setPlayerError}
             />
 
             {/* ==================================================
                 ABOUT
-            ================================================== */}
+            ================================================== */
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <h2 className="text-2xl font-bold text-slate-900">
@@ -762,7 +767,7 @@ function CourseDetails() {
 
             {/* ==================================================
                 CURRICULUM
-            ================================================== */}
+            ================================================== */
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <div className="flex items-center justify-between gap-4">
@@ -875,7 +880,7 @@ function CourseDetails() {
 
             {/* ==================================================
                 WHAT YOU LEARN
-            ================================================== */}
+            ================================================== */
 
             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-8">
               <h2 className="text-2xl font-bold text-slate-900">
@@ -904,7 +909,7 @@ function CourseDetails() {
 
           {/* ==================================================
               SIDEBAR
-          ================================================== */}
+          ================================================== */
 
           <aside className="space-y-6">
             <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
@@ -1029,7 +1034,7 @@ function CourseDetails() {
 
       {/* ==================================================
           FINAL CTA
-      ================================================== */}
+      ================================================== */
 
       <section className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-12 text-center sm:px-6 sm:py-16">
@@ -1066,6 +1071,179 @@ function CourseDetails() {
 // VIDEO PLAYER
 // ======================================================
 
+// ======================================================
+// VIDEO SOURCE HELPERS
+// ======================================================
+
+function getVideoSourceInfo(rawUrl, rawType = "") {
+  const url = String(rawUrl || "").trim();
+  const type = String(rawType || "").toLowerCase();
+
+  if (!url) {
+    return { type: "none", url: "", videoId: "" };
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    const host = parsed.hostname
+      .toLowerCase()
+      .replace(/^www\./, "")
+      .replace(/^m\./, "");
+
+    const isYouTubeHost =
+      host === "youtube.com" ||
+      host === "youtu.be" ||
+      host === "youtube-nocookie.com";
+
+    if (isYouTubeHost) {
+      let videoId = "";
+
+      if (host === "youtu.be") {
+        videoId = parsed.pathname.split("/").filter(Boolean)[0] || "";
+      } else {
+        const pathParts = parsed.pathname.split("/").filter(Boolean);
+
+        if (pathParts[0] === "watch") {
+          videoId = parsed.searchParams.get("v") || "";
+        } else if (
+          pathParts[0] === "shorts" ||
+          pathParts[0] === "embed" ||
+          pathParts[0] === "live"
+        ) {
+          videoId = pathParts[1] || "";
+        }
+      }
+
+      if (videoId) {
+        return {
+          type: "youtube",
+          url,
+          videoId,
+          embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`,
+        };
+      }
+    }
+
+    if (
+      type === "youtube" ||
+      type === "youtube_link" ||
+      type === "youtube-link"
+    ) {
+      const videoId =
+        parsed.searchParams.get("v") ||
+        parsed.pathname.split("/").filter(Boolean).pop() ||
+        "";
+
+      if (videoId) {
+        return {
+          type: "youtube",
+          url,
+          videoId,
+          embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`,
+        };
+      }
+    }
+
+    const extensionMatch = parsed.pathname.match(
+      /\.(mp4|webm|ogg|m4v|mov)(?:$|\?)/i
+    );
+
+    if (
+      extensionMatch ||
+      type === "upload" ||
+      type === "uploaded" ||
+      type === "file" ||
+      type === "video"
+    ) {
+      return {
+        type: "html5",
+        url,
+        videoId: "",
+        embedUrl: "",
+      };
+    }
+
+    return {
+      type: "html5",
+      url,
+      videoId: "",
+      embedUrl: "",
+    };
+  } catch {
+    return {
+      type: "invalid",
+      url,
+      videoId: "",
+      embedUrl: "",
+    };
+  }
+}
+
+let youtubeApiPromise = null;
+
+function loadYouTubeIframeAPI() {
+  if (typeof window === "undefined") {
+    return Promise.reject(
+      new Error("YouTube player is only available in a browser.")
+    );
+  }
+
+  if (window.YT?.Player) {
+    return Promise.resolve(window.YT);
+  }
+
+  if (youtubeApiPromise) {
+    return youtubeApiPromise;
+  }
+
+  youtubeApiPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(
+      'script[src="https://www.youtube.com/iframe_api"]'
+    );
+
+    const previousReady = window.onYouTubeIframeAPIReady;
+
+    window.onYouTubeIframeAPIReady = () => {
+      try {
+        if (typeof previousReady === "function") {
+          previousReady();
+        }
+      } catch {
+        // Another application callback should not prevent our player.
+      }
+
+      if (window.YT?.Player) {
+        resolve(window.YT);
+      } else {
+        reject(
+          new Error("YouTube API loaded but the player is unavailable.")
+        );
+      }
+    };
+
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      script.onerror = () =>
+        reject(new Error("Unable to load the YouTube player."));
+      document.head.appendChild(script);
+    } else if (window.YT?.Player) {
+      resolve(window.YT);
+    }
+  }).catch((error) => {
+    youtubeApiPromise = null;
+    throw error;
+  });
+
+  return youtubeApiPromise;
+}
+
+// ======================================================
+// VIDEO PLAYER
+// ======================================================
+
 function VideoLessonPlayer({
   user,
   courseId,
@@ -1080,35 +1258,58 @@ function VideoLessonPlayer({
   setPlayerError,
 }) {
   const videoRef = useRef(null);
+  const youtubeContainerRef = useRef(null);
+  const youtubePlayerRef = useRef(null);
+  const youtubeIntervalRef = useRef(null);
   const lastSavedAtRef = useRef(0);
+
   const maxWatchedRef = useRef(
     Number(progress?.watchedSeconds) || 0
   );
 
+  const currentTimeRef = useRef(
+    Number(progress?.watchedSeconds) || 0
+  );
+
+  const durationRef = useRef(
+    Number(progress?.duration) || 0
+  );
+
   const [isPlaying, setIsPlaying] = useState(false);
+
   const [duration, setDuration] = useState(
     Number(progress?.duration) || 0
   );
+
   const [currentTime, setCurrentTime] = useState(
     Number(progress?.watchedSeconds) || 0
   );
+
   const [volume, setVolume] = useState(1);
-  const [playbackRate, setPlaybackRate] =
-    useState(1);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [muted, setMuted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [showVolume, setShowVolume] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
 
-  const [showSpeed, setShowSpeed] =
-    useState(false);
+  // Refs keep asynchronous YouTube callbacks connected to the latest
+  // progress/volume state without forcing the player to be recreated.
+  const saveProgressRef = useRef(null);
+  const volumeRef = useRef(volume);
+  const youtubeReadyRef = useRef(false);
 
-  const [showVolume, setShowVolume] =
-    useState(false);
+  const sourceInfo = useMemo(
+    () =>
+      getVideoSourceInfo(
+        selectedLesson?.videoUrl,
+        selectedLesson?.videoType
+      ),
+    [selectedLesson?.videoUrl, selectedLesson?.videoType]
+  );
 
-  const [localError, setLocalError] =
-    useState("");
-
-  const sourceUrl =
-    selectedLesson?.videoUrl || "";
+  const sourceUrl = sourceInfo.url;
 
   const watchedSeconds = Math.max(
     Number(currentTime) || 0,
@@ -1119,52 +1320,43 @@ function VideoLessonPlayer({
     duration > 0
       ? Math.min(
           100,
-          Math.round(
-            (watchedSeconds / duration) * 100
-          )
+          Math.round((watchedSeconds / duration) * 100)
         )
       : 0;
 
   const attendanceReached =
     watchPercent >= WATCH_REQUIREMENT;
 
-  const hasVideo =
-    Boolean(sourceUrl);
+  const hasVideo = Boolean(sourceUrl);
 
-  // ------------------------------------------------------
-  // Reset player when lesson changes
-  // ------------------------------------------------------
-
-  useEffect(() => {
-    const initialSeconds =
-      Number(progress?.watchedSeconds) || 0;
-
-    maxWatchedRef.current = initialSeconds;
-
-    setCurrentTime(initialSeconds);
-
-    setDuration(
-      Number(progress?.duration) || 0
-    );
-
-    setIsPlaying(false);
-    setPlaybackRate(1);
-    setPlayerError("");
-    setLocalError("");
-    lastSavedAtRef.current = 0;
-
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime =
-        initialSeconds;
-      videoRef.current.playbackRate = 1;
+  const stopYouTubePolling = useCallback(() => {
+    if (youtubeIntervalRef.current) {
+      window.clearInterval(youtubeIntervalRef.current);
+      youtubeIntervalRef.current = null;
     }
-  }, [
-    selectedLesson?.id,
-    progress?.watchedSeconds,
-    progress?.duration,
-    setPlayerError,
-  ]);
+  }, []);
+
+  const destroyYouTubePlayer = useCallback(() => {
+    stopYouTubePolling();
+    youtubeReadyRef.current = false;
+
+    const player = youtubePlayerRef.current;
+    youtubePlayerRef.current = null;
+
+    if (!player) return;
+
+    try {
+      const iframe = player.getIframe?.();
+
+      // YouTube can throw postMessage warnings if destroy() is called after
+      // React has already detached the iframe from the DOM.
+      if (!iframe || iframe.isConnected !== false) {
+        player.destroy?.();
+      }
+    } catch {
+      // The player may already be detached/destroyed during navigation.
+    }
+  }, [stopYouTubePolling]);
 
   // ------------------------------------------------------
   // Save progress
@@ -1173,24 +1365,34 @@ function VideoLessonPlayer({
   const saveProgress = useCallback(
     async ({
       force = false,
-      current =
-        videoRef.current?.currentTime || 0,
-      videoDuration =
-        videoRef.current?.duration || duration || 0,
+      current,
+      videoDuration,
     } = {}) => {
+      if (!user || !courseId || !selectedLesson?.id) {
+        return;
+      }
+
+      const fallbackCurrent =
+        Number.isFinite(Number(current))
+          ? Number(current)
+          : Number(currentTimeRef.current) || 0;
+
+      const fallbackDuration =
+        Number.isFinite(Number(videoDuration)) &&
+        Number(videoDuration) > 0
+          ? Number(videoDuration)
+          : Number(durationRef.current) || 0;
+
       if (
-        !user ||
-        !courseId ||
-        !selectedLesson?.id ||
-        !videoDuration ||
-        !Number.isFinite(videoDuration)
+        !fallbackDuration ||
+        !Number.isFinite(fallbackDuration)
       ) {
         return;
       }
 
       const safeCurrent = Math.max(
         0,
-        Number(current) || 0
+        Math.min(fallbackCurrent, fallbackDuration)
       );
 
       maxWatchedRef.current = Math.max(
@@ -1198,14 +1400,14 @@ function VideoLessonPlayer({
         safeCurrent
       );
 
-      const safeWatched =
-        maxWatchedRef.current;
+      const safeWatched = Math.min(
+        maxWatchedRef.current,
+        fallbackDuration
+      );
 
       const percent = Math.min(
         100,
-        Math.round(
-          (safeWatched / videoDuration) * 100
-        )
+        Math.round((safeWatched / fallbackDuration) * 100)
       );
 
       const completed25 =
@@ -1215,8 +1417,7 @@ function VideoLessonPlayer({
 
       if (
         !force &&
-        now - lastSavedAtRef.current <
-          PROGRESS_SAVE_INTERVAL
+        now - lastSavedAtRef.current < PROGRESS_SAVE_INTERVAL
       ) {
         return;
       }
@@ -1243,37 +1444,29 @@ function VideoLessonPlayer({
             lessonId: selectedLesson.id,
             lessonTitle: selectedLesson.title,
             watchedSeconds: safeWatched,
-            duration: videoDuration,
+            duration: fallbackDuration,
             percent,
-            requiredWatchPercent:
-              WATCH_REQUIREMENT,
+            requiredWatchPercent: WATCH_REQUIREMENT,
             completed25,
-            attendance: completed25
-              ? "present"
-              : "absent",
+            attendance: completed25 ? "present" : "absent",
             lastWatchedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           },
           { merge: true }
         );
 
-        onProgressSaved(
-          selectedLesson.id,
-          {
-            watchedSeconds: safeWatched,
-            duration: videoDuration,
-            percent,
-            completed25,
-            attendance: completed25
-              ? "present"
-              : "absent",
-          }
-        );
+        onProgressSaved(selectedLesson.id, {
+          watchedSeconds: safeWatched,
+          duration: fallbackDuration,
+          percent,
+          completed25,
+          attendance: completed25 ? "present" : "absent",
+        });
+
+        setLocalError("");
       } catch (err) {
-        console.error(
-          "Progress save error:",
-          err
-        );
+        console.error("Progress save error:", err);
+
         setLocalError(
           "Progress could not be saved. Please check your connection."
         );
@@ -1286,10 +1479,381 @@ function VideoLessonPlayer({
       courseId,
       courseTitle,
       selectedLesson,
-      duration,
       onProgressSaved,
     ]
   );
+
+  useEffect(() => {
+    saveProgressRef.current = saveProgress;
+  }, [saveProgress]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    if (playerError) {
+      setLocalError(playerError);
+    }
+  }, [playerError]);
+
+  // ------------------------------------------------------
+  // Reset player when lesson/source changes
+  // ------------------------------------------------------
+
+  useEffect(() => {
+    const initialSeconds =
+      Number(progress?.watchedSeconds) || 0;
+
+    const initialDuration =
+      Number(progress?.duration) || 0;
+
+    maxWatchedRef.current = initialSeconds;
+    currentTimeRef.current = initialSeconds;
+    durationRef.current = initialDuration;
+
+    setCurrentTime(initialSeconds);
+    setDuration(initialDuration);
+    setIsPlaying(false);
+    setPlaybackRate(1);
+    setPlayerError("");
+    setLocalError("");
+    setYoutubeLoading(sourceInfo.type === "youtube");
+    lastSavedAtRef.current = 0;
+
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.currentTime = initialSeconds;
+        videoRef.current.playbackRate = 1;
+      } catch {
+        // The video element may be changing sources.
+      }
+    }
+
+  }, [
+    selectedLesson?.id,
+    sourceInfo.type,
+    sourceInfo.url,
+    setPlayerError,
+  ]);
+
+  // ------------------------------------------------------
+  // Apply progress loaded after the course page mounted
+  // ------------------------------------------------------
+
+  useEffect(() => {
+    if (
+      !selectedLesson?.id ||
+      isPlaying ||
+      !progress
+    ) {
+      return;
+    }
+
+    const savedSeconds =
+      Number(progress.watchedSeconds) || 0;
+
+    const savedDuration =
+      Number(progress.duration) || 0;
+
+    // Do not reset the player from the same progress update
+    // that this component just wrote to Firestore.
+    if (
+      savedSeconds <= Number(currentTimeRef.current) &&
+      savedDuration <= Number(durationRef.current)
+    ) {
+      return;
+    }
+
+    maxWatchedRef.current = Math.max(
+      maxWatchedRef.current,
+      savedSeconds
+    );
+
+    if (savedDuration > 0) {
+      setDuration(savedDuration);
+      durationRef.current = savedDuration;
+    }
+
+    setCurrentTime(savedSeconds);
+    currentTimeRef.current = savedSeconds;
+
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      if (player) {
+        try {
+          player.seekTo(savedSeconds, true);
+        } catch {
+          // Player may not be ready yet.
+        }
+      }
+    } else if (videoRef.current) {
+      try {
+        videoRef.current.currentTime = savedSeconds;
+      } catch {
+        // Browser may reject a seek before metadata is ready.
+      }
+    }
+  }, [
+    progress?.watchedSeconds,
+    progress?.duration,
+    selectedLesson?.id,
+    sourceInfo.type,
+    isPlaying,
+  ]);
+
+  // ------------------------------------------------------
+  // Initialize YouTube
+  // ------------------------------------------------------
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Always clean up the previous YouTube instance when the source changes.
+    // This effect intentionally does NOT depend on saveProgress or volume.
+    // Those values are read from refs so Firestore progress updates cannot
+    // recreate the iframe while the user is watching.
+    if (
+      sourceInfo.type !== "youtube" ||
+      !sourceInfo.videoId
+    ) {
+      destroyYouTubePlayer();
+      setYoutubeLoading(false);
+      return () => {
+        cancelled = true;
+        destroyYouTubePlayer();
+      };
+    }
+
+    const initialize = async () => {
+      try {
+        setYoutubeLoading(true);
+        setLocalError("");
+        youtubeReadyRef.current = false;
+
+        const YT = await loadYouTubeIframeAPI();
+
+        if (cancelled || !youtubeContainerRef.current) {
+          return;
+        }
+
+        // If an older player somehow survived, destroy it before creating
+        // the new instance. Never manually wipe the container with
+        // innerHTML because doing so can detach a live YouTube iframe.
+        destroyYouTubePlayer();
+
+        const container = youtubeContainerRef.current;
+        const playerElement = document.createElement("div");
+        playerElement.className = "h-full w-full";
+        container.replaceChildren(playerElement);
+
+        const player = new YT.Player(playerElement, {
+          width: "100%",
+          height: "100%",
+          videoId: sourceInfo.videoId,
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            enablejsapi: 1,
+          },
+          events: {
+            onReady: (event) => {
+              if (cancelled) return;
+
+              youtubePlayerRef.current = event.target;
+              youtubeReadyRef.current = true;
+
+              const videoDuration =
+                Number(event.target.getDuration()) || 0;
+
+              setDuration(videoDuration);
+              durationRef.current = videoDuration;
+
+              const saved =
+                Number(progress?.watchedSeconds) || 0;
+
+              const resumeAt = Math.min(
+                saved,
+                Math.max(0, videoDuration - 0.5)
+              );
+
+              maxWatchedRef.current = resumeAt;
+              currentTimeRef.current = resumeAt;
+
+              if (resumeAt > 0) {
+                try {
+                  event.target.seekTo(resumeAt, true);
+                } catch {
+                  // Ignore seek errors during initialization.
+                }
+
+                setCurrentTime(resumeAt);
+              }
+
+              try {
+                event.target.setVolume(
+                  Math.round(volumeRef.current * 100)
+                );
+              } catch {
+                // Ignore initial volume errors.
+              }
+
+              setYoutubeLoading(false);
+            },
+
+            onStateChange: (event) => {
+              if (cancelled || !youtubeReadyRef.current) return;
+
+              const state = event.data;
+
+              if (state === window.YT.PlayerState.PLAYING) {
+                setIsPlaying(true);
+                setLocalError("");
+
+                stopYouTubePolling();
+                youtubeIntervalRef.current = window.setInterval(() => {
+                  const currentPlayer = youtubePlayerRef.current;
+
+                  if (
+                    cancelled ||
+                    !currentPlayer ||
+                    !youtubeReadyRef.current
+                  ) {
+                    return;
+                  }
+
+                  try {
+                    const time =
+                      Number(currentPlayer.getCurrentTime()) || 0;
+                    const videoDuration =
+                      Number(currentPlayer.getDuration()) || 0;
+
+                    setCurrentTime(time);
+                    currentTimeRef.current = time;
+
+                    if (videoDuration > 0) {
+                      setDuration(videoDuration);
+                      durationRef.current = videoDuration;
+                      maxWatchedRef.current = Math.max(
+                        maxWatchedRef.current,
+                        time
+                      );
+
+                      saveProgressRef.current?.({
+                        current: time,
+                        videoDuration,
+                      });
+                    }
+                  } catch {
+                    // Player can disappear during navigation.
+                  }
+                }, 1000);
+              } else if (state === window.YT.PlayerState.PAUSED) {
+                setIsPlaying(false);
+                stopYouTubePolling();
+
+                try {
+                  const time =
+                    Number(event.target.getCurrentTime()) || 0;
+                  const videoDuration =
+                    Number(event.target.getDuration()) || 0;
+
+                  if (videoDuration > 0) {
+                    setCurrentTime(time);
+                    currentTimeRef.current = time;
+                    durationRef.current = videoDuration;
+
+                    saveProgressRef.current?.({
+                      force: true,
+                      current: time,
+                      videoDuration,
+                    });
+                  }
+                } catch {
+                  // Ignore player cleanup race conditions.
+                }
+              } else if (state === window.YT.PlayerState.ENDED) {
+                setIsPlaying(false);
+                stopYouTubePolling();
+
+                try {
+                  const videoDuration =
+                    Number(event.target.getDuration()) || 0;
+
+                  if (videoDuration > 0) {
+                    maxWatchedRef.current = videoDuration;
+                    setCurrentTime(videoDuration);
+                    currentTimeRef.current = videoDuration;
+                    durationRef.current = videoDuration;
+
+                    saveProgressRef.current?.({
+                      force: true,
+                      current: videoDuration,
+                      videoDuration,
+                    });
+                  }
+                } catch {
+                  // Ignore player cleanup race conditions.
+                }
+              }
+            },
+
+            onError: (event) => {
+              if (cancelled) return;
+
+              console.error("YouTube player error:", event?.data);
+              setIsPlaying(false);
+              stopYouTubePolling();
+              setYoutubeLoading(false);
+              youtubeReadyRef.current = false;
+
+              setLocalError(
+                "YouTube could not play this video. Make sure the video is public and embedding is allowed."
+              );
+            },
+          },
+        });
+
+        if (!cancelled) {
+          youtubePlayerRef.current = player;
+        } else {
+          try {
+            player.destroy?.();
+          } catch {
+            // Ignore late initialization cleanup.
+          }
+        }
+      } catch (err) {
+        console.error("YouTube initialization error:", err);
+
+        if (!cancelled) {
+          setYoutubeLoading(false);
+          youtubeReadyRef.current = false;
+          setLocalError(
+            "Unable to load the YouTube player. Please check your internet connection."
+          );
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      cancelled = true;
+      stopYouTubePolling();
+      destroyYouTubePlayer();
+    };
+  }, [
+    sourceInfo.type,
+    sourceInfo.videoId,
+    destroyYouTubePlayer,
+    stopYouTubePolling,
+  ]);
 
   // ------------------------------------------------------
   // Cleanup/save on lesson/page change
@@ -1297,6 +1861,35 @@ function VideoLessonPlayer({
 
   useEffect(() => {
     return () => {
+      stopYouTubePolling();
+
+      const player =
+        youtubePlayerRef.current;
+
+      if (
+        player &&
+        typeof player.getCurrentTime === "function" &&
+        typeof player.getDuration === "function"
+      ) {
+        try {
+          const current =
+            Number(player.getCurrentTime()) || 0;
+
+          const videoDuration =
+            Number(player.getDuration()) || 0;
+
+          if (videoDuration > 0) {
+            saveProgressRef.current?.({
+              force: true,
+              current,
+              videoDuration,
+            });
+          }
+        } catch {
+          // Ignore unload cleanup errors.
+        }
+      }
+
       const video = videoRef.current;
 
       if (
@@ -1305,7 +1898,7 @@ function VideoLessonPlayer({
         selectedLesson?.id &&
         video.duration
       ) {
-        saveProgress({
+        saveProgressRef.current?.({
           force: true,
           current: video.currentTime,
           videoDuration: video.duration,
@@ -1315,56 +1908,12 @@ function VideoLessonPlayer({
   }, [
     selectedLesson?.id,
     user,
-    saveProgress,
+    stopYouTubePolling,
   ]);
 
   // ------------------------------------------------------
-  // Controls
+  // HTML5 video events
   // ------------------------------------------------------
-
-  const togglePlay = async () => {
-    const video = videoRef.current;
-
-    if (!video || !hasVideo) return;
-
-    try {
-      if (video.paused) {
-        await video.play();
-      } else {
-        video.pause();
-      }
-    } catch (err) {
-      console.error("Video play error:", err);
-      setLocalError(
-        "The video could not be played. Check the video URL."
-      );
-    }
-  };
-
-  const seekBy = (seconds) => {
-    const video = videoRef.current;
-
-    if (!video) return;
-
-    video.currentTime = Math.max(
-      0,
-      Math.min(
-        video.duration || 0,
-        video.currentTime + seconds
-      )
-    );
-  };
-
-  const handleSeek = (event) => {
-    const video = videoRef.current;
-
-    if (!video || !video.duration) return;
-
-    const value = Number(event.target.value);
-
-    video.currentTime =
-      (value / 100) * video.duration;
-  };
 
   const handleLoadedMetadata = () => {
     const video = videoRef.current;
@@ -1374,7 +1923,12 @@ function VideoLessonPlayer({
     const videoDuration =
       Number(video.duration) || 0;
 
+    if (!Number.isFinite(videoDuration)) {
+      return;
+    }
+
     setDuration(videoDuration);
+    durationRef.current = videoDuration;
 
     const saved =
       Number(progress?.watchedSeconds) || 0;
@@ -1387,8 +1941,14 @@ function VideoLessonPlayer({
     maxWatchedRef.current = saved;
 
     if (resumeAt > 0) {
-      video.currentTime = resumeAt;
+      try {
+        video.currentTime = resumeAt;
+      } catch {
+        // Browser may reject an early seek.
+      }
+
       setCurrentTime(resumeAt);
+      currentTimeRef.current = resumeAt;
     }
   };
 
@@ -1400,13 +1960,14 @@ function VideoLessonPlayer({
     const time = video.currentTime || 0;
 
     setCurrentTime(time);
+    currentTimeRef.current = time;
 
     maxWatchedRef.current = Math.max(
       maxWatchedRef.current,
       time
     );
 
-    saveProgress({
+    saveProgressRef.current?.({
       current: time,
       videoDuration: video.duration,
     });
@@ -1418,7 +1979,7 @@ function VideoLessonPlayer({
     const video = videoRef.current;
 
     if (video?.duration) {
-      saveProgress({
+      saveProgressRef.current?.({
         force: true,
         current: video.currentTime,
         videoDuration: video.duration,
@@ -1442,7 +2003,7 @@ function VideoLessonPlayer({
         video.duration
       );
 
-      saveProgress({
+      saveProgressRef.current?.({
         force: true,
         current: video.duration,
         videoDuration: video.duration,
@@ -1453,15 +2014,140 @@ function VideoLessonPlayer({
   const handleVideoError = () => {
     setIsPlaying(false);
     setLocalError(
-      "This video could not be loaded. Check the video URL or Firebase Storage permissions."
+      "This video could not be loaded. If this is YouTube, use a YouTube watch/shorts URL. If it is a file, make sure the direct MP4/WebM URL is publicly accessible."
     );
   };
 
-  const changeSpeed = (speed) => {
+  // ------------------------------------------------------
+  // Unified controls
+  // ------------------------------------------------------
+
+  const togglePlay = async () => {
+    if (!hasVideo) return;
+
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      if (!player) {
+        setLocalError(
+          "The YouTube player is still loading. Please try again."
+        );
+        return;
+      }
+
+      try {
+        const state = player.getPlayerState?.();
+
+        if (
+          state ===
+          window.YT?.PlayerState?.PLAYING
+        ) {
+          player.pauseVideo();
+        } else {
+          player.playVideo();
+        }
+      } catch (err) {
+        console.error(
+          "YouTube play error:",
+          err
+        );
+
+        setLocalError(
+          "The YouTube video could not be played. Check whether embedding is allowed."
+        );
+      }
+
+      return;
+    }
+
     const video = videoRef.current;
 
-    if (video) {
-      video.playbackRate = speed;
+    if (!video) return;
+
+    try {
+      if (video.paused) {
+        await video.play();
+      } else {
+        video.pause();
+      }
+    } catch (err) {
+      console.error(
+        "Video play error:",
+        err
+      );
+
+      setLocalError(
+        "The video could not be played. Check the video URL."
+      );
+    }
+  };
+
+  const seekTo = (seconds) => {
+    const nextTime = Math.max(
+      0,
+      Math.min(
+        Number(duration) || 0,
+        Number(seconds) || 0
+      )
+    );
+
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      if (!player) return;
+
+      try {
+        player.seekTo(nextTime, true);
+        setCurrentTime(nextTime);
+        currentTimeRef.current = nextTime;
+      } catch {
+        setLocalError(
+          "Unable to seek in this YouTube video."
+        );
+      }
+
+      return;
+    }
+
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    video.currentTime = nextTime;
+    currentTimeRef.current = nextTime;
+  };
+
+  const seekBy = (seconds) => {
+    seekTo(
+      (Number(currentTime) || 0) + seconds
+    );
+  };
+
+  const handleSeek = (event) => {
+    if (!duration) return;
+
+    const value = Number(event.target.value);
+
+    seekTo((value / 100) * duration);
+  };
+
+  const changeSpeed = (speed) => {
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      try {
+        player?.setPlaybackRate?.(speed);
+      } catch {
+        setLocalError(
+          "This YouTube video does not support that playback speed."
+        );
+      }
+    } else {
+      const video = videoRef.current;
+
+      if (video) {
+        video.playbackRate = speed;
+      }
     }
 
     setPlaybackRate(speed);
@@ -1469,12 +2155,37 @@ function VideoLessonPlayer({
   };
 
   const changeVolume = (value) => {
-    const video = videoRef.current;
-
-    const next = Number(value);
+    const next = Math.max(
+      0,
+      Math.min(1, Number(value))
+    );
 
     setVolume(next);
     setMuted(next === 0);
+
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      try {
+        if (player) {
+          player.setVolume(
+            Math.round(next * 100)
+          );
+
+          if (next > 0) {
+            player.unMute();
+          } else {
+            player.mute();
+          }
+        }
+      } catch {
+        // Ignore volume API errors.
+      }
+
+      return;
+    }
+
+    const video = videoRef.current;
 
     if (video) {
       video.volume = next;
@@ -1483,6 +2194,31 @@ function VideoLessonPlayer({
   };
 
   const toggleMute = () => {
+    if (sourceInfo.type === "youtube") {
+      const player = youtubePlayerRef.current;
+
+      if (!player) return;
+
+      try {
+        if (muted) {
+          player.unMute();
+
+          if (volume === 0) {
+            player.setVolume(100);
+            setVolume(1);
+          }
+        } else {
+          player.mute();
+        }
+
+        setMuted(!muted);
+      } catch {
+        // Ignore player state errors.
+      }
+
+      return;
+    }
+
     const video = videoRef.current;
 
     if (!video) return;
@@ -1490,7 +2226,6 @@ function VideoLessonPlayer({
     const nextMuted = !video.muted;
 
     video.muted = nextMuted;
-
     setMuted(nextMuted);
   };
 
@@ -1511,22 +2246,22 @@ function VideoLessonPlayer({
     const seconds = total % 60;
 
     if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(
-        2,
-        "0"
-      )}:${String(seconds).padStart(2, "0")}`;
+      return `${hours}:${String(
+        minutes
+      ).padStart(2, "0")}:${String(
+        seconds
+      ).padStart(2, "0")}`;
     }
 
-    return `${minutes}:${String(seconds).padStart(
-      2,
-      "0"
-    )}`;
+    return `${minutes}:${String(
+      seconds
+    ).padStart(2, "0")}`;
   };
 
   const goPrevious = () => {
     if (selectedLessonIndex <= 0) return;
 
-    saveProgress({ force: true });
+    saveProgressRef.current?.({ force: true });
 
     setSelectedLessonIndex(
       selectedLessonIndex - 1
@@ -1548,7 +2283,7 @@ function VideoLessonPlayer({
       return;
     }
 
-    saveProgress({ force: true });
+    saveProgressRef.current?.({ force: true });
 
     setSelectedLessonIndex(
       selectedLessonIndex + 1
@@ -1575,6 +2310,13 @@ function VideoLessonPlayer({
       </section>
     );
   }
+
+  const playerTitle =
+    sourceInfo.type === "youtube"
+      ? "YouTube video"
+      : sourceInfo.type === "html5"
+      ? "Video file"
+      : "Video";
 
   return (
     <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -1638,21 +2380,26 @@ function VideoLessonPlayer({
       {/* VIDEO */}
 
       <div className="relative aspect-video bg-black">
-        {hasVideo ? (
+        {sourceInfo.type === "youtube" ? (
+          <div
+            ref={youtubeContainerRef}
+            className="h-full w-full"
+            aria-label={playerTitle}
+          />
+        ) : sourceInfo.type === "html5" ? (
           <video
             ref={videoRef}
             src={sourceUrl}
             preload="metadata"
             playsInline
             className="h-full w-full object-contain"
-            onLoadedMetadata={
-              handleLoadedMetadata
-            }
+            onLoadedMetadata={handleLoadedMetadata}
             onTimeUpdate={handleTimeUpdate}
             onPlay={handlePlay}
             onPause={handlePause}
             onEnded={handleEnded}
             onError={handleVideoError}
+            controls={false}
           >
             {selectedLesson.captionsUrl && (
               <track
@@ -1673,14 +2420,27 @@ function VideoLessonPlayer({
             </h3>
 
             <p className="mt-2 max-w-md text-sm text-slate-400">
-              This lesson does not have a video link or uploaded
-              video yet.
+              This lesson does not have a valid video URL yet.
+              Add a YouTube link such as youtube.com/watch?v=...
+              or a direct MP4/WebM file URL.
             </p>
           </div>
         )}
 
+        {youtubeLoading && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40">
+            <div className="flex items-center gap-2 rounded-xl bg-slate-900/90 px-4 py-3 text-sm font-semibold text-white shadow-xl">
+              <Loader2
+                size={18}
+                className="animate-spin"
+              />
+              Loading video...
+            </div>
+          </div>
+        )}
+
         {localError && (
-          <div className="absolute left-3 right-3 top-3 z-10 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-lg sm:left-5 sm:right-5 sm:top-5">
+          <div className="absolute left-3 right-3 top-3 z-20 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-lg sm:left-5 sm:right-5 sm:top-5">
             {localError}
           </div>
         )}
@@ -1688,142 +2448,152 @@ function VideoLessonPlayer({
 
       {/* CONTROLS */}
 
-      {hasVideo && (
-        <div className="border-t border-slate-200 bg-slate-950 p-3 text-white sm:p-4">
-          <div className="mb-3">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="0.1"
-              value={
-                duration > 0
-                  ? Math.min(
-                      100,
-                      (currentTime / duration) *
-                        100
-                    )
-                  : 0
-              }
-              onChange={handleSeek}
-              className="h-1.5 w-full cursor-pointer accent-blue-500"
-              aria-label="Video progress"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={togglePlay}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label={
-                isPlaying ? "Pause" : "Play"
-              }
-            >
-              {isPlaying ? (
-                <Pause size={18} />
-              ) : (
-                <Play size={18} />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => seekBy(-10)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label="Back 10 seconds"
-              title="Back 10 seconds"
-            >
-              <RotateCcw size={18} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => seekBy(10)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
-              aria-label="Forward 10 seconds"
-              title="Forward 10 seconds"
-            >
-              <RotateCw size={18} />
-            </button>
-
-            <div className="ml-1 text-xs font-semibold text-slate-300 sm:text-sm">
-              {formatTime(currentTime)} /{" "}
-              {formatTime(duration)}
+      {hasVideo &&
+        (sourceInfo.type === "youtube" ||
+          sourceInfo.type === "html5") && (
+          <div className="border-t border-slate-200 bg-slate-950 p-3 text-white sm:p-4">
+            <div className="mb-3">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={
+                  duration > 0
+                    ? Math.min(
+                        100,
+                        (currentTime / duration) * 100
+                      )
+                    : 0
+                }
+                onChange={handleSeek}
+                disabled={!duration}
+                className="h-1.5 w-full cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Video progress"
+              />
             </div>
 
-            <div className="ml-auto flex items-center gap-1">
-              {/* VOLUME */}
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVolume(
-                      (previous) => !previous
-                    )
-                  }
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
-                  aria-label="Volume"
-                >
-                  {muted || volume === 0 ? (
-                    <VolumeX size={18} />
-                  ) : (
-                    <Volume2 size={18} />
-                  )}
-                </button>
-
-                {showVolume && (
-                  <div className="absolute bottom-12 right-0 z-20 rounded-xl bg-slate-900 p-3 shadow-xl ring-1 ring-white/10">
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={volume}
-                      onChange={(event) =>
-                        changeVolume(
-                          event.target.value
-                        )
-                      }
-                      className="w-28 accent-blue-500"
-                      aria-label="Volume"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={toggleMute}
-                      className="mt-2 w-full rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold hover:bg-white/20"
-                    >
-                      {muted
-                        ? "Unmute"
-                        : "Mute"}
-                    </button>
-                  </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={togglePlay}
+                disabled={
+                  sourceInfo.type === "youtube" &&
+                  (!youtubePlayerRef.current ||
+                    youtubeLoading)
+                }
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={
+                  isPlaying ? "Pause" : "Play"
+                }
+              >
+                {isPlaying ? (
+                  <Pause size={18} />
+                ) : (
+                  <Play size={18} />
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seekBy(-10)}
+                disabled={!duration}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Back 10 seconds"
+                title="Back 10 seconds"
+              >
+                <RotateCcw size={18} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seekBy(10)}
+                disabled={!duration}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Forward 10 seconds"
+                title="Forward 10 seconds"
+              >
+                <RotateCw size={18} />
+              </button>
+
+              <div className="ml-1 text-xs font-semibold text-slate-300 sm:text-sm">
+                {formatTime(currentTime)} /{" "}
+                {formatTime(duration)}
               </div>
 
-              {/* SPEED */}
+              <div className="ml-auto flex items-center gap-1">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVolume(
+                        (previous) => !previous
+                      )
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
+                    aria-label="Volume"
+                  >
+                    {muted || volume === 0 ? (
+                      <VolumeX size={18} />
+                    ) : (
+                      <Volume2 size={18} />
+                    )}
+                  </button>
 
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowSpeed(
-                      (previous) => !previous
-                    )
-                  }
-                  className="flex h-10 items-center gap-1 rounded-xl bg-white/10 px-3 text-xs font-bold hover:bg-white/20 sm:text-sm"
-                  aria-label="Playback speed"
-                >
-                  {playbackRate}x
-                  <ChevronDown size={14} />
-                </button>
+                  {showVolume && (
+                    <div className="absolute bottom-12 right-0 z-30 rounded-xl bg-slate-900 p-3 shadow-xl ring-1 ring-white/10">
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={volume}
+                        onChange={(event) =>
+                          changeVolume(
+                            event.target.value
+                          )
+                        }
+                        className="w-28 accent-blue-500"
+                        aria-label="Volume"
+                      />
 
-                {showSpeed && (
-                  <div className="absolute bottom-12 right-0 z-20 min-w-28 overflow-hidden rounded-xl bg-slate-900 shadow-xl ring-1 ring-white/10">
-                    {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(
-                      (speed) => (
+                      <button
+                        type="button"
+                        onClick={toggleMute}
+                        className="mt-2 w-full rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold hover:bg-white/20"
+                      >
+                        {muted ? "Unmute" : "Mute"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowSpeed(
+                        (previous) => !previous
+                      )
+                    }
+                    className="flex h-10 items-center gap-1 rounded-xl bg-white/10 px-3 text-xs font-bold hover:bg-white/20 sm:text-sm"
+                    aria-label="Playback speed"
+                  >
+                    {playbackRate}x
+                    <ChevronDown size={14} />
+                  </button>
+
+                  {showSpeed && (
+                    <div className="absolute bottom-12 right-0 z-30 min-w-28 overflow-hidden rounded-xl bg-slate-900 shadow-xl ring-1 ring-white/10">
+                      {[
+                        0.5,
+                        0.75,
+                        1,
+                        1.25,
+                        1.5,
+                        1.75,
+                        2,
+                      ].map((speed) => (
                         <button
                           type="button"
                           key={speed}
@@ -1838,13 +2608,19 @@ function VideoLessonPlayer({
                         >
                           {speed}x
                         </button>
-                      )
-                    )}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+        )}
+
+      {sourceInfo.type === "youtube" && (
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+          YouTube video • Use the controls above to play, seek,
+          change volume, and playback speed.
         </div>
       )}
 
@@ -1864,8 +2640,8 @@ function VideoLessonPlayer({
               </p>
 
               <p className="mt-1 text-xs leading-5 text-emerald-700">
-                You watched at least{" "}
-                {WATCH_REQUIREMENT}% of this lesson.
+                You watched at least {WATCH_REQUIREMENT}%
+                of this lesson.
                 {saving &&
                   " Saving your latest progress..."}
               </p>
@@ -1892,15 +2668,11 @@ function VideoLessonPlayer({
           </div>
         )}
 
-        {/* LESSON NAVIGATION */}
-
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
           <button
             type="button"
             onClick={goPrevious}
-            disabled={
-              selectedLessonIndex === 0
-            }
+            disabled={selectedLessonIndex === 0}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft size={18} />
@@ -1911,8 +2683,7 @@ function VideoLessonPlayer({
             type="button"
             onClick={goNext}
             disabled={
-              selectedLessonIndex ===
-                lessons.length - 1 ||
+              selectedLessonIndex === lessons.length - 1 ||
               !attendanceReached
             }
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
