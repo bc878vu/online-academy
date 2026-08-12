@@ -1,4 +1,12 @@
+// ======================================================
+// FIREBASE APP
+// ======================================================
+
 import { initializeApp } from "firebase/app";
+
+// ======================================================
+// FIREBASE AUTH
+// ======================================================
 
 import {
   getAuth,
@@ -7,9 +15,17 @@ import {
   browserLocalPersistence,
 } from "firebase/auth";
 
+// ======================================================
+// FIRESTORE
+// ======================================================
+
 import {
   getFirestore,
 } from "firebase/firestore";
+
+// ======================================================
+// FIREBASE STORAGE
+// ======================================================
 
 import {
   getStorage,
@@ -39,17 +55,22 @@ const requiredFirebaseConfig = {
   apiKey: firebaseConfig.apiKey,
   authDomain: firebaseConfig.authDomain,
   projectId: firebaseConfig.projectId,
+  storageBucket: firebaseConfig.storageBucket,
+  messagingSenderId: firebaseConfig.messagingSenderId,
   appId: firebaseConfig.appId,
 };
 
-for (const [key, value] of Object.entries(requiredFirebaseConfig)) {
-  if (!value) {
-    console.error(
-      `Missing Firebase environment variable for: ${key}. Check your .env file and restart Vite.`
-    );
-  }
-}
+const missingFirebaseConfig = Object.entries(
+  requiredFirebaseConfig
+)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
 
+if (missingFirebaseConfig.length > 0) {
+  throw new Error(
+    `Missing Firebase environment variables: ${missingFirebaseConfig.join(", ")}`
+  );
+}
 
 // ======================================================
 // INITIALIZE FIREBASE
@@ -59,7 +80,7 @@ const app = initializeApp(firebaseConfig);
 
 
 // ======================================================
-// AUTHENTICATION
+// FIREBASE AUTH
 // ======================================================
 
 export const auth = getAuth(app);
@@ -75,7 +96,7 @@ setPersistence(auth, browserLocalPersistence).catch((error) => {
 
 
 // ======================================================
-// GOOGLE AUTH
+// GOOGLE AUTH PROVIDER
 // ======================================================
 
 export const googleProvider = new GoogleAuthProvider();
@@ -83,11 +104,6 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: "select_account",
 });
-
-
-// ======================================================
-// FIRESTORE
-// ======================================================
 
 export const db = getFirestore(app);
 

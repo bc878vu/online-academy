@@ -53,6 +53,10 @@ const Courses = lazy(
   () => import("./pages/Courses")
 );
 
+const CourseDetails = lazy(
+  () => import("./pages/CourseDetails")
+);
+
 const Login = lazy(
   () => import("./pages/Login")
 );
@@ -1013,6 +1017,13 @@ function App() {
               }
             />
 
+            <Route
+              path="/courses/:courseId"
+              element={
+                <CourseDetails />
+              }
+            />
+
 
             {/* ==========================================
                 STUDENT LOGIN
@@ -1145,7 +1156,7 @@ function App() {
 
 
             {/* ==========================================
-                404
+                404 FALLBACK
             ========================================== */}
 
             <Route
