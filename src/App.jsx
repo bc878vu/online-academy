@@ -19,6 +19,7 @@ import { auth } from "./firebase";
 const Home = lazy(() => import("./pages/Home"));
 const Courses = lazy(() => import("./pages/Courses"));
 const CourseDetails = lazy(() => import("./pages/CourseDetails"));
+const LectureProgressGuard = lazy(() => import("./pages/LectureProgressGuard"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -246,7 +247,14 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/courses" element={<Courses />} />
-            <Route path="/courses/:courseId" element={<CourseDetails />} />
+            <Route
+              path="/courses/:courseId"
+              element={
+                <LectureProgressGuard>
+                  <CourseDetails />
+                </LectureProgressGuard>
+              }
+            />
             <Route path="/certificate" element={<Certificate />} />
             <Route path="/terms" element={<TermsPolicy />} />
 
