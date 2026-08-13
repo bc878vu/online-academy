@@ -18,26 +18,32 @@ body {
 
 /* ======================================================
    CERTIFICATE PRINT
-   - A4 landscape
-   - Exactly one page
-   - Hide the app chrome/footer while printing
-   - Keep the certificate centered and professional
+   - Full single-page landscape certificate
+   - Works with Chrome/Android Save as PDF
+   - Forces Letter landscape to match the mobile print preview
+   - Hides website navigation/footer while printing
 ====================================================== */
 @media print {
   @page {
-    size: A4 landscape;
+    size: Letter landscape;
     margin: 0;
   }
 
   html,
   body {
-    width: 297mm;
-    height: 210mm;
-    min-width: 0;
+    width: 11in !important;
+    height: 8.5in !important;
+    min-width: 0 !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
     overflow: hidden !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   body * {
@@ -50,11 +56,12 @@ body {
   }
 
   .certificate-print-root {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 297mm !important;
-    height: 210mm !important;
+    position: static !important;
+    display: block !important;
+    width: 11in !important;
+    height: 8.5in !important;
     min-height: 0 !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
@@ -62,36 +69,38 @@ body {
   }
 
   .certificate-print-root > div {
-    width: 297mm !important;
+    width: 11in !important;
+    height: 8.5in !important;
     max-width: none !important;
-    height: 210mm !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
   .certificate-sheet {
-    width: 297mm !important;
-    height: 210mm !important;
-    min-height: 210mm !important;
+    width: 11in !important;
+    height: 8.5in !important;
+    min-height: 8.5in !important;
+    max-height: 8.5in !important;
     margin: 0 !important;
-    padding: 8mm !important;
+    padding: 0.22in !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: hidden !important;
-    page-break-after: avoid !important;
     page-break-before: avoid !important;
-    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
     break-before: avoid-page !important;
+    break-after: avoid-page !important;
     break-inside: avoid !important;
   }
 
   .certificate-sheet-inner {
     width: 100% !important;
-    height: 194mm !important;
-    min-height: 194mm !important;
-    max-height: 194mm !important;
-    padding: 8mm !important;
+    height: 8.06in !important;
+    min-height: 8.06in !important;
+    max-height: 8.06in !important;
+    padding: 0.28in !important;
     overflow: hidden !important;
     display: flex !important;
     align-items: center !important;
@@ -140,37 +149,37 @@ body {
   }
 
   .certificate-sheet-inner .p-3,
-  .certificate-sheet-inner .sm\:p-4 {
+  .certificate-sheet-inner .sm\\:p-4 {
     padding: 8px !important;
   }
 
-  .certificate-sheet-inner .sm\:h-16 {
+  .certificate-sheet-inner .sm\\:h-16 {
     height: 52px !important;
     width: 52px !important;
   }
 
-  .certificate-sheet-inner .sm\:h-20 {
+  .certificate-sheet-inner .sm\\:h-20 {
     height: 64px !important;
     width: 64px !important;
   }
 
-  .certificate-sheet-inner .sm\:w-44 {
+  .certificate-sheet-inner .sm\\:w-44 {
     width: 150px !important;
   }
 
-  .certificate-sheet-inner .sm\:text-sm {
+  .certificate-sheet-inner .sm\\:text-sm {
     font-size: 12px !important;
   }
 
-  .certificate-sheet-inner .sm\:text-xs {
+  .certificate-sheet-inner .sm\\:text-xs {
     font-size: 10px !important;
   }
 
-  .certificate-sheet-inner .sm\:gap-8 {
+  .certificate-sheet-inner .sm\\:gap-8 {
     gap: 18px !important;
   }
 
-  .certificate-sheet-inner .lg\:p-14 {
-    padding: 8mm !important;
+  .certificate-sheet-inner .lg\\:p-14 {
+    padding: 0.28in !important;
   }
 }
