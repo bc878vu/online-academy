@@ -15,11 +15,11 @@ import {
   LogOut,
   Menu,
   ShieldCheck,
-  User,
   X,
   FileText,
   Award,
   ChevronRight,
+  User,
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
@@ -43,13 +43,22 @@ const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
 
 const ADMIN_EMAIL = "admin@onlineacademy.com";
 
+function BrandMark({ className = "" }) {
+  return (
+    <img
+      src="/favicon.svg"
+      alt="Online Academy"
+      className={`object-contain ${className}`}
+      draggable="false"
+    />
+  );
+}
+
 function PageLoader({ text = "Loading..." }) {
   return (
-    <div className="flex min-h-[calc(100vh-72px)] items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-[calc(100vh-76px)] items-center justify-center bg-slate-50 px-4">
       <div className="text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-          <GraduationCap size={28} className="text-blue-600" />
-        </div>
+        <BrandMark className="mx-auto h-14 w-14 rounded-2xl shadow-lg shadow-blue-600/15" />
         <div className="mx-auto mt-5 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
         <p className="mt-4 text-sm font-semibold text-slate-600">{text}</p>
       </div>
@@ -61,9 +70,7 @@ function AppLoading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/20">
-          <GraduationCap size={32} className="text-white" />
-        </div>
+        <BrandMark className="mx-auto h-16 w-16 rounded-[20px] shadow-xl shadow-blue-600/20" />
         <div className="mx-auto mt-6 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
         <p className="mt-4 text-sm font-semibold text-slate-600">Loading Online Academy...</p>
       </div>
@@ -102,16 +109,36 @@ function CourseRoute() {
 
 const Navbar = memo(function Navbar({ user, isAdmin }) {
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => setMobileOpen(false), [location.pathname]);
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   const isActive = (path) =>
-    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+    path === "/"
+      ? location.pathname === "/"
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const handleLogout = async () => {
     try {
-      setMobileOpen(false);
+      setMenuOpen(false);
       await signOut(auth);
     } catch (error) {
       console.error("Logout error:", error);
@@ -126,201 +153,302 @@ const Navbar = memo(function Navbar({ user, isAdmin }) {
     .map((part) => part[0]?.toUpperCase())
     .join("") || "S";
 
-  const navItems = [
+  const primaryItems = [
     { to: "/", label: "Home", icon: HomeIcon },
     { to: "/courses", label: "Courses", icon: BookOpen },
     { to: "/certificate", label: "Certificate", icon: Award },
-    { to: "/verify-certificate", label: "Verify", icon: ShieldCheck },
-    { to: "/terms", label: "Terms", icon: FileText },
+    { to: "/verify-certificate", label: "Verify Certificate", icon: ShieldCheck },
   ];
 
-  const desktopItem = (active) =>
-    `group relative inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all duration-200 ${
+  const navLink = (active) =>
+    `group relative inline-flex min-h-11 items-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-all duration-200 ${
       active
-        ? "bg-blue-50 text-blue-700 shadow-sm"
+        ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100"
         : "text-slate-600 hover:bg-slate-50 hover:text-blue-700"
     }`;
 
-  const mobileItem = (active) =>
-    `flex min-h-[50px] items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-bold transition-all ${
+  const menuLink = (active) =>
+    `flex min-h-[54px] w-full items-center gap-3 rounded-2xl px-3.5 text-[15px] font-extrabold transition-all ${
       active
-        ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100"
+        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
         : "text-slate-700 hover:bg-slate-50"
     }`;
 
   return (
     <>
-      <header className="sticky top-0 z-[100] border-b border-slate-200/80 bg-white/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-2xl">
-        <div className="mx-auto max-w-[1440px] px-3 sm:px-5 lg:px-7 xl:px-8">
-          <nav className="flex min-h-[70px] items-center justify-between gap-3 lg:min-h-[76px]">
+      <header className="sticky top-0 z-[100] border-b border-slate-200/80 bg-white/95 shadow-[0_8px_32px_rgba(15,23,42,0.07)] backdrop-blur-2xl">
+        <div className="mx-auto max-w-[1480px] px-3 sm:px-5 lg:px-7 xl:px-8">
+          <nav className="flex min-h-[72px] items-center gap-3 lg:min-h-[78px]" aria-label="Primary navigation">
             <Link
               to="/"
               aria-label="Online Academy home"
-              className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3"
+              className="group flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 lg:flex-none"
             >
-              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[15px] bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 shadow-lg shadow-blue-600/25 ring-1 ring-blue-500/20 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl group-hover:shadow-blue-600/30 sm:h-12 sm:w-12">
-                <div className="absolute -right-3 -top-3 h-8 w-8 rounded-full bg-white/20 blur-sm" />
-                <span className="relative text-[13px] font-black tracking-tight text-white sm:text-sm">OA</span>
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-[16px] font-black leading-tight tracking-[-0.02em] text-slate-900 sm:text-[18px]">Online Academy</div>
-                <div className="mt-0.5 truncate text-[10px] font-semibold tracking-wide text-slate-400 sm:text-[11px]">Learn. Grow. Succeed.</div>
-              </div>
+              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-white shadow-[0_8px_24px_rgba(37,99,235,0.18)] ring-1 ring-slate-200/80 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_28px_rgba(37,99,235,0.22)] sm:h-12 sm:w-12">
+                <BrandMark className="h-full w-full rounded-[15px]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[16px] font-black leading-tight tracking-[-0.025em] text-slate-950 sm:text-[18px] lg:text-[19px]">
+                  Online Academy
+                </span>
+                <span className="mt-0.5 block truncate text-[9px] font-bold tracking-[0.08em] text-slate-400 sm:text-[10px]">
+                  LEARN. GROW. <span className="text-blue-600">SUCCEED.</span>
+                </span>
+              </span>
             </Link>
 
-            <div className="hidden items-center gap-1 xl:flex">
-              <div className="flex items-center rounded-2xl border border-slate-200/80 bg-slate-50/70 p-1">
-                {navItems.map(({ to, label, icon: Icon }) => (
-                  <Link key={to} to={to} className={desktopItem(isActive(to))}>
-                    <Icon size={15} strokeWidth={2.2} />
-                    <span>{label}</span>
-                    {to === "/" && isActive(to) ? <span className="absolute bottom-1 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-blue-600" /> : null}
+            <div className="hidden flex-1 items-center justify-center lg:flex">
+              <div className="flex items-center gap-1 rounded-2xl border border-slate-200/80 bg-slate-50/75 p-1 shadow-inner shadow-white">
+                {primaryItems.map(({ to, label, icon: Icon }) => (
+                  <Link key={to} to={to} className={navLink(isActive(to))}>
+                    <Icon size={16} strokeWidth={2.15} />
+                    <span className="whitespace-nowrap">{label}</span>
+                    {isActive(to) && (
+                      <span className="absolute inset-x-3 -bottom-1 h-0.5 rounded-full bg-blue-600" />
+                    )}
                   </Link>
                 ))}
               </div>
+            </div>
 
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
               {user ? (
-                <div className="ml-2 flex items-center gap-1.5">
-                  <Link
-                    to="/dashboard"
-                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-extrabold transition-all ${
-                      isActive("/dashboard")
-                        ? "bg-blue-700 text-white shadow-lg shadow-blue-600/20"
-                        : "bg-blue-600 text-white shadow-md shadow-blue-600/20 hover:-translate-y-0.5 hover:bg-blue-700"
-                    }`}
-                  >
-                    <LayoutDashboard size={16} /> Dashboard
-                  </Link>
-                  <Link
-                    to="/profile"
-                    title="My Profile"
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl border text-xs font-black transition-all ${
-                      isActive("/profile")
-                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                    }`}
-                  >
-                    {initials}
-                  </Link>
-                  {isAdmin && (
-                    <Link
-                      to="/admin"
-                      title="Admin Panel"
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
-                    >
-                      <ShieldCheck size={17} />
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    title="Logout"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100"
-                  >
-                    <LogOut size={17} />
-                  </button>
-                </div>
+                <Link
+                  to="/dashboard"
+                  aria-label="Open dashboard"
+                  className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-3.5 text-[13px] font-extrabold transition-all sm:px-4 ${
+                    isActive("/dashboard")
+                      ? "bg-blue-700 text-white shadow-lg shadow-blue-600/25"
+                      : "bg-blue-600 text-white shadow-md shadow-blue-600/20 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-lg"
+                  }`}
+                >
+                  <LayoutDashboard size={17} />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </Link>
               ) : (
                 <Link
                   to="/login"
-                  className="ml-2 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-extrabold text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-extrabold text-white shadow-md shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 sm:px-5"
                 >
-                  Login <ChevronRight size={16} />
+                  Login
+                  <ChevronRight size={16} />
                 </Link>
               )}
-            </div>
 
-            <button
-              type="button"
-              aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
-              aria-expanded={mobileOpen}
-              onClick={() => setMobileOpen((value) => !value)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 xl:hidden"
-            >
-              {mobileOpen ? <X size={24} strokeWidth={2.2} /> : <Menu size={24} strokeWidth={2.2} />}
-            </button>
+              {user && (
+                <Link
+                  to="/profile"
+                  aria-label="My profile"
+                  title={displayName}
+                  className={`hidden h-11 w-11 items-center justify-center rounded-xl border text-xs font-black transition-all lg:flex ${
+                    isActive("/profile")
+                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                  }`}
+                >
+                  {initials}
+                </Link>
+              )}
+
+              <button
+                type="button"
+                aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((value) => !value)}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-white shadow-sm transition-all duration-200 ${
+                  menuOpen
+                    ? "border-blue-200 bg-blue-50 text-blue-700 shadow-md"
+                    : "border-slate-200 text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md"
+                }`}
+              >
+                {menuOpen ? <X size={23} strokeWidth={2.15} /> : <Menu size={23} strokeWidth={2.15} />}
+              </button>
+            </div>
           </nav>
+
+          <div className="flex gap-1 overflow-x-auto pb-2 lg:hidden" style={{ scrollbarWidth: "none" }}>
+            {primaryItems.slice(0, 3).map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-[12px] font-extrabold transition-all ${
+                  isActive(to)
+                    ? "border-blue-100 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-blue-100 hover:text-blue-700"
+                }`}
+              >
+                <Icon size={14} /> {label}
+              </Link>
+            ))}
+          </div>
         </div>
       </header>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[90] bg-slate-950/25 backdrop-blur-[2px] xl:hidden" onClick={() => setMobileOpen(false)}>
-          <div
-            className="absolute left-3 right-3 top-[82px] max-h-[calc(100vh-96px)] overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-3 shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:left-5 sm:right-5"
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-slate-950/30 backdrop-blur-[3px]"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        >
+          <aside
+            className="absolute right-0 top-0 flex h-full w-full max-w-[410px] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-[-24px_0_70px_rgba(15,23,42,0.20)] sm:w-[390px]"
             onClick={(event) => event.stopPropagation()}
+            aria-label="More navigation"
           >
-            {user && (
-              <div className="mb-2 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 p-3 ring-1 ring-blue-100">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-sm font-black text-white shadow-md shadow-blue-600/20">
-                  {initials}
+            <div className="flex min-h-[78px] items-center justify-between border-b border-slate-100 px-4 sm:px-5">
+              <Link to="/" className="flex min-w-0 items-center gap-3" onClick={() => setMenuOpen(false)}>
+                <BrandMark className="h-11 w-11 rounded-xl shadow-md shadow-blue-600/15" />
+                <div className="min-w-0">
+                  <p className="truncate text-[17px] font-black text-slate-950">Online Academy</p>
+                  <p className="text-[10px] font-bold tracking-[0.08em] text-slate-400">LEARN. GROW. SUCCEED.</p>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-extrabold text-slate-900">{displayName}</p>
-                  <p className="truncate text-xs text-slate-500">{user.email || "Online Academy Student"}</p>
-                </div>
-                <Link
-                  to="/profile"
-                  className="rounded-lg bg-white px-2.5 py-2 text-xs font-bold text-blue-700 shadow-sm ring-1 ring-blue-100"
-                >
-                  Profile
-                </Link>
-              </div>
-            )}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close menu"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <X size={21} />
+              </button>
+            </div>
 
-            <div className="grid gap-1">
-              {navItems.map(({ to, label, icon: Icon }) => (
-                <Link key={to} to={to} className={mobileItem(isActive(to))}>
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isActive(to) ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
-                    <Icon size={19} />
-                  </span>
-                  <span className="flex-1">{label === "Verify" ? "Verify Certificate" : label}</span>
-                  <ChevronRight size={17} className="text-slate-300" />
-                </Link>
-              ))}
-
+            <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4">
               {user && (
-                <>
-                  <Link to="/dashboard" className={mobileItem(isActive("/dashboard"))}>
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isActive("/dashboard") ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}><LayoutDashboard size={19} /></span>
+                <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-3.5 ring-1 ring-blue-100">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-sm font-black text-white shadow-lg shadow-blue-600/20">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-extrabold text-slate-950">{displayName}</p>
+                    <p className="truncate text-xs text-slate-500">{user.email || "Online Academy Student"}</p>
+                  </div>
+                  <Link
+                    to="/profile"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-xl bg-white px-3 py-2 text-xs font-extrabold text-blue-700 shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50"
+                  >
+                    Profile
+                  </Link>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {primaryItems.map(({ to, label, icon: Icon }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={() => setMenuOpen(false)}
+                    className={menuLink(isActive(to))}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isActive(to) ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
+                      <Icon size={19} strokeWidth={2.1} />
+                    </span>
+                    <span className="flex-1">{label}</span>
+                    <ChevronRight size={17} className="text-slate-300" />
+                  </Link>
+                ))}
+
+                {user && (
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setMenuOpen(false)}
+                    className={menuLink(isActive("/dashboard"))}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isActive("/dashboard") ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
+                      <LayoutDashboard size={19} strokeWidth={2.1} />
+                    </span>
                     <span className="flex-1">Dashboard</span>
                     <ChevronRight size={17} className="text-slate-300" />
                   </Link>
-                  {isAdmin && (
-                    <>
-                      <Link to="/admin" className={mobileItem(isActive("/admin"))}>
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500"><ShieldCheck size={19} /></span>
-                        <span className="flex-1">Admin Panel</span>
-                        <ChevronRight size={17} className="text-slate-300" />
-                      </Link>
-                      <Link to="/admin/assessments" className={mobileItem(isActive("/admin/assessments"))}>
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500"><FileText size={19} /></span>
-                        <span className="flex-1">Assessments</span>
-                        <ChevronRight size={17} className="text-slate-300" />
-                      </Link>
-                    </>
-                  )}
-                  <div className="my-2 border-t border-slate-100" />
+                )}
+
+                {user && (
+                  <Link
+                    to="/profile"
+                    onClick={() => setMenuOpen(false)}
+                    className={menuLink(isActive("/profile"))}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isActive("/profile") ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
+                      <User size={19} strokeWidth={2.1} />
+                    </span>
+                    <span className="flex-1">My Profile</span>
+                    <ChevronRight size={17} className="text-slate-300" />
+                  </Link>
+                )}
+
+                <Link
+                  to="/terms"
+                  onClick={() => setMenuOpen(false)}
+                  className={menuLink(isActive("/terms"))}
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isActive("/terms") ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
+                    <FileText size={19} strokeWidth={2.1} />
+                  </span>
+                  <span className="flex-1">Terms & Policy</span>
+                  <ChevronRight size={17} className="text-slate-300" />
+                </Link>
+
+                {isAdmin && (
+                  <>
+                    <Link
+                      to="/admin"
+                      onClick={() => setMenuOpen(false)}
+                      className={menuLink(isActive("/admin"))}
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                        <ShieldCheck size={19} strokeWidth={2.1} />
+                      </span>
+                      <span className="flex-1">Admin Panel</span>
+                      <ChevronRight size={17} className="text-slate-300" />
+                    </Link>
+                    <Link
+                      to="/admin/assessments"
+                      onClick={() => setMenuOpen(false)}
+                      className={menuLink(isActive("/admin/assessments"))}
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                        <FileText size={19} strokeWidth={2.1} />
+                      </span>
+                      <span className="flex-1">Assessments</span>
+                      <ChevronRight size={17} className="text-slate-300" />
+                    </Link>
+                  </>
+                )}
+              </div>
+
+              {!user ? (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <Link
+                    to="/login"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex min-h-[54px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 text-sm font-extrabold text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5"
+                  >
+                    Login to Online Academy <ChevronRight size={18} />
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-4 border-t border-slate-100 pt-4">
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex min-h-[50px] w-full items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-bold text-red-600 transition hover:bg-red-50"
+                    className="flex min-h-[54px] w-full items-center gap-3 rounded-2xl px-3.5 text-[15px] font-extrabold text-red-600 transition hover:bg-red-50"
                   >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50"><LogOut size={19} /></span>
-                    Logout
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50">
+                      <LogOut size={19} />
+                    </span>
+                    <span className="flex-1 text-left">Logout</span>
+                    <ChevronRight size={17} className="text-red-200" />
                   </button>
-                </>
-              )}
-
-              {!user && (
-                <>
-                  <div className="my-2 border-t border-slate-100" />
-                  <Link to="/login" className="flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-[15px] font-extrabold text-white shadow-lg shadow-blue-600/20">
-                    Login to Online Academy <ChevronRight size={18} />
-                  </Link>
-                </>
+                </div>
               )}
             </div>
-          </div>
+
+            <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Online Academy</p>
+              <p className="mt-1 text-xs text-slate-400">Learn. Grow. Succeed.</p>
+            </div>
+          </aside>
         </div>
       )}
     </>
@@ -334,8 +462,8 @@ const Footer = memo(function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid gap-8 md:grid-cols-3">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">OA</div>
+            <div className="flex items-center gap-2.5">
+              <BrandMark className="h-9 w-9 rounded-xl shadow-sm" />
               <span className="font-extrabold text-slate-800">Online Academy</span>
             </div>
             <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">Learn through structured courses, track your progress, and earn certificates through Online Academy.</p>
