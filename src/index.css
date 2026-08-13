@@ -4,55 +4,59 @@
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
 
-/* Professional Online Academy brand mark */
+/* Online Academy brand logo: use the real site mark everywhere. */
 header a[href="/"] > div:first-child {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(145deg, #0b3b8f 0%, #2563eb 58%, #4f46e5 100%) !important;
+  background: #fff url("/favicon.svg") center / cover no-repeat !important;
   border-radius: 14px !important;
-  box-shadow: 0 8px 22px rgba(37, 99, 235, .24) !important;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, .18) !important;
+  border: 1px solid rgba(148, 163, 184, .25);
 }
-header a[href="/"] > div:first-child svg { display: none; }
-header a[href="/"] > div:first-child::before {
-  content: "OA";
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: -.06em;
-}
-header a[href="/"] > div:first-child::after {
-  content: "";
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  right: -6px;
-  top: -7px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.16);
-}
+header a[href="/"] > div:first-child > * { display: none !important; }
 
 footer .flex.items-center.gap-2 > div:first-child {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(145deg, #0b3b8f, #2563eb) !important;
+  background: #fff url("/favicon.svg") center / cover no-repeat !important;
+  border-radius: 12px !important;
 }
-footer .flex.items-center.gap-2 > div:first-child svg { display: none; }
-footer .flex.items-center.gap-2 > div:first-child::before {
-  content: "OA";
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: -.05em;
+footer .flex.items-center.gap-2 > div:first-child > * { display: none !important; }
+
+/* Navbar polish without changing the shared global navbar structure. */
+header {
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+header nav a, header nav button {
+  -webkit-tap-highlight-color: transparent;
+}
+header nav a:focus-visible, header nav button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* The navbar is global in App.jsx, including Dashboard. */
+@media (min-width: 1024px) {
+  header nav > div.hidden { display: flex !important; }
+  header nav > button[aria-label*="navigation menu"] { display: none !important; }
+}
+
+@media (max-width: 1023px) {
+  header nav > div.hidden { display: none !important; }
+  header nav > button[aria-label*="navigation menu"] { display: flex !important; }
+}
+
+@media (max-width: 639px) {
+  header nav { min-height: 66px !important; }
+  header nav > a[href="/"] > div:first-child {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 13px !important;
+  }
+  header nav > a[href="/"] > div:nth-child(2) > div:first-child {
+    font-size: 15px !important;
+  }
 }
 
 .certificate-sheet { position: relative; }
@@ -70,7 +74,6 @@ footer .flex.items-center.gap-2 > div:first-child::before {
 .certificate-rule { width:68px; height:1px; background:linear-gradient(90deg,transparent,#d4af37); }
 .certificate-rule:last-child { background:linear-gradient(90deg,#d4af37,transparent); }
 
-/* Certificate printing: use the complete browser print area and keep the certificate on exactly one page. */
 @media print {
   @page { size: landscape; margin: 0; }
   html, body { width: 100% !important; height: 100% !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; overflow: hidden !important; }
@@ -84,35 +87,4 @@ footer .flex.items-center.gap-2 > div:first-child::before {
   .certificate-signatures { margin-top: 2.5% !important; }
   .certificate-verified { margin-top: 1.5% !important; }
   .certificate-verification { margin-top: .6% !important; }
-}
-
-/* Responsive navigation refinement: keep key pages visible and move secondary pages into the menu. */
-@media (min-width: 1024px) {
-  header nav > div.hidden > div:first-child > a:nth-of-type(4),
-  header nav > div.hidden > div:first-child > a:nth-of-type(5) { display: none !important; }
-
-  /* On desktop the same compact menu button is used for secondary navigation. */
-  header nav > button[aria-label*="navigation menu"] { display: flex !important; }
-
-  /* Existing secondary menu opens as a professional desktop popover. */
-  header + div.fixed.inset-0 { display: block !important; }
-  header + div.fixed.inset-0 > div { top: 84px !important; left: auto !important; right: 28px !important; width: 360px !important; max-height: calc(100vh - 105px) !important; }
-}
-
-@media (max-width: 1023px) {
-  /* Mobile/tablet: keep Home, Courses and Certificate visible in a compact quick-nav row. */
-  header nav > div.hidden { display: flex !important; position: absolute !important; left: 12px !important; right: 64px !important; top: 100% !important; align-items: center !important; gap: 4px !important; padding: 7px 0 !important; overflow-x: auto !important; background: transparent !important; border: 0 !important; }
-  header nav > div.hidden > div:first-child { display: flex !important; align-items: center !important; gap: 4px !important; padding: 0 !important; border: 0 !important; background: transparent !important; }
-  header nav > div.hidden > div:first-child > a { display: inline-flex !important; white-space: nowrap !important; min-height: 36px !important; padding: 0 11px !important; border-radius: 10px !important; background: #f8fafc !important; border: 1px solid #e2e8f0 !important; font-size: 11px !important; }
-  header nav > div.hidden > div:first-child > a:nth-of-type(4),
-  header nav > div.hidden > div:first-child > a:nth-of-type(5) { display: none !important; }
-  header nav > div.hidden > div:last-child { display: none !important; }
-  header nav { position: relative !important; }
-  header { margin-bottom: 48px !important; }
-  header + div.fixed.inset-0 { display: block !important; }
-  header + div.fixed.inset-0 > div { top: 126px !important; }
-}
-
-@media (min-width: 640px) and (max-width: 1023px) {
-  header { margin-bottom: 50px !important; }
 }
