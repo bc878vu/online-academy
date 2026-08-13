@@ -20,25 +20,21 @@ const PAGE_DESCRIPTION =
 
 function setMetaName(name, content) {
   let element = document.querySelector(`meta[name="${name}"]`);
-
   if (!element) {
     element = document.createElement("meta");
     element.setAttribute("name", name);
     document.head.appendChild(element);
   }
-
   element.setAttribute("content", content);
 }
 
 function setMetaProperty(property, content) {
   let element = document.querySelector(`meta[property="${property}"]`);
-
   if (!element) {
     element = document.createElement("meta");
     element.setAttribute("property", property);
     document.head.appendChild(element);
   }
-
   element.setAttribute("content", content);
 }
 
@@ -46,27 +42,23 @@ function setCanonical(url) {
   let element = document.querySelector(
     'link[data-certificate-canonical="true"]'
   );
-
   if (!element) {
     element = document.createElement("link");
     element.setAttribute("rel", "canonical");
     element.setAttribute("data-certificate-canonical", "true");
     document.head.appendChild(element);
   }
-
   element.setAttribute("href", url);
 }
 
 function setStructuredData(schema) {
   let element = document.getElementById("certificate-verification-schema");
-
   if (!element) {
     element = document.createElement("script");
-    element.setAttribute("id", "certificate-verification-schema");
-    element.setAttribute("type", "application/ld+json");
+    element.id = "certificate-verification-schema";
+    element.type = "application/ld+json";
     document.head.appendChild(element);
   }
-
   element.textContent = JSON.stringify(schema);
 }
 
@@ -79,9 +71,8 @@ function updateCertificateSEO({ id, studentName, courseTitle, issueDate }) {
     "Certificate status: Valid.";
 
   document.title = `${studentName} — Certificate ${id} | Online Academy`;
-
   setMetaName("description", description);
-  setMetaName("robots", "index,follow,max-image-preview:large");
+  setMetaName("robots", "index,follow,max-image-preview:large,max-snippet:-1");
   setMetaName("twitter:card", "summary");
   setMetaName("twitter:title", `Certificate ${id} | Online Academy`);
   setMetaName("twitter:description", description);
@@ -91,7 +82,6 @@ function updateCertificateSEO({ id, studentName, courseTitle, issueDate }) {
   setMetaProperty("og:url", verificationUrl);
   setMetaProperty("og:type", "website");
   setMetaProperty("og:site_name", "Online Academy");
-
   setCanonical(verificationUrl);
 
   setStructuredData({
@@ -130,8 +120,7 @@ export default function VerifyCertificate() {
   const [copied, setCopied] = useState(false);
 
   const urlCertificateId = useMemo(
-    () =>
-      searchParams.get("certificateId")?.trim().toUpperCase() || "",
+    () => searchParams.get("certificateId")?.trim().toUpperCase() || "",
     [searchParams]
   );
 
@@ -158,8 +147,7 @@ export default function VerifyCertificate() {
     setCopied(false);
 
     try {
-      const certificateRef = doc(db, "certificates", id);
-      const certificateSnap = await getDoc(certificateRef);
+      const certificateSnap = await getDoc(doc(db, "certificates", id));
 
       if (!certificateSnap.exists()) {
         setStatus("invalid");
@@ -177,11 +165,7 @@ export default function VerifyCertificate() {
         return;
       }
 
-      const certificateData = {
-        id: certificateSnap.id,
-        ...data,
-      };
-
+      const certificateData = { id: certificateSnap.id, ...data };
       setCertificate(certificateData);
       setStatus("valid");
 
@@ -206,7 +190,6 @@ export default function VerifyCertificate() {
 
   useEffect(() => {
     if (!urlCertificateId) return;
-
     setCertificateId(urlCertificateId);
     verifyCertificate(undefined, urlCertificateId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,7 +209,6 @@ export default function VerifyCertificate() {
 
   const copyVerificationLink = async () => {
     if (!verificationUrl) return;
-
     try {
       await navigator.clipboard.writeText(verificationUrl);
       setCopied(true);
@@ -244,24 +226,21 @@ export default function VerifyCertificate() {
   return (
     <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
-        <div className="text-center">
+        <section className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
             <ShieldCheck size={32} />
           </div>
-
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
             Online Academy
           </p>
-
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
             Verify Certificate
           </h1>
-
           <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">
             Enter the Certificate ID printed on an Online Academy certificate
             to verify its authenticity and current validity.
           </p>
-        </div>
+        </section>
 
         <form
           onSubmit={verifyCertificate}
@@ -270,18 +249,16 @@ export default function VerifyCertificate() {
           <label className="mb-2 block text-sm font-bold text-slate-800">
             Certificate ID
           </label>
-
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               type="text"
               value={certificateId}
               onChange={(event) => setCertificateId(event.target.value)}
-              placeholder="Example: OA-COURSE-USERID"
+              placeholder="Example: OA-OMAMB7ZT-CKSBS3NG"
               autoComplete="off"
               spellCheck="false"
               className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-semibold uppercase outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
             />
-
             <button
               type="submit"
               disabled={status === "loading"}
@@ -309,20 +286,17 @@ export default function VerifyCertificate() {
         </form>
 
         {status === "valid" && certificate && (
-          <div className="mt-8 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-xl">
+          <section className="mt-8 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-xl">
             <div className="bg-emerald-600 px-6 py-5 text-white sm:px-8">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
                   <CheckCircle2 size={27} />
                 </div>
-
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-100">
                     Verification Result
                   </p>
-                  <h2 className="text-2xl font-extrabold">
-                    Certificate Valid
-                  </h2>
+                  <h2 className="text-2xl font-extrabold">Certificate Valid</h2>
                 </div>
               </div>
             </div>
@@ -333,58 +307,32 @@ export default function VerifyCertificate() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Certificate ID
-                  </p>
-                  <p className="mt-1 break-all text-sm font-extrabold text-slate-900">
-                    {certificate.id}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Status
-                  </p>
-                  <p className="mt-1 flex items-center gap-2 text-sm font-extrabold text-emerald-600">
-                    <CheckCircle2 size={17} />
-                    Valid
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Student
-                  </p>
-                  <p className="mt-1 text-sm font-extrabold text-slate-900">
-                    {certificate.studentName || "Online Academy Student"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Course
-                  </p>
-                  <p className="mt-1 text-sm font-extrabold text-slate-900">
-                    {certificate.courseTitle || "Online Course"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-4 sm:col-span-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Issue Date
-                  </p>
-                  <p className="mt-1 text-sm font-extrabold text-slate-900">
-                    {certificate.issueDate || "—"}
-                  </p>
-                </div>
+                <InfoCard label="Certificate ID" value={certificate.id} breakAll />
+                <InfoCard
+                  label="Status"
+                  value={
+                    <span className="flex items-center gap-2 text-emerald-600">
+                      <CheckCircle2 size={17} /> Valid
+                    </span>
+                  }
+                />
+                <InfoCard
+                  label="Student"
+                  value={certificate.studentName || "Online Academy Student"}
+                />
+                <InfoCard
+                  label="Course"
+                  value={certificate.courseTitle || "Online Course"}
+                />
+                <InfoCard
+                  label="Issue Date"
+                  value={certificate.issueDate || "—"}
+                  className="sm:col-span-2"
+                />
               </div>
 
               <div className="mt-6 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                <ShieldCheck
-                  size={22}
-                  className="mt-0.5 shrink-0 text-emerald-600"
-                />
+                <ShieldCheck size={22} className="mt-0.5 shrink-0 text-emerald-600" />
                 <p className="text-sm leading-6 text-emerald-800">
                   This certificate is registered with Online Academy and its
                   current status is <strong>Valid</strong>.
@@ -399,24 +347,20 @@ export default function VerifyCertificate() {
                 >
                   {copied ? (
                     <>
-                      <Check size={17} />
-                      Link Copied
+                      <Check size={17} /> Link Copied
                     </>
                   ) : (
                     <>
-                      <Copy size={17} />
-                      Copy Verification Link
+                      <Copy size={17} /> Copy Verification Link
                     </>
                   )}
                 </button>
-
                 <button
                   type="button"
                   onClick={openVerificationPage}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
                 >
-                  <ExternalLink size={17} />
-                  Open Verification Page
+                  <ExternalLink size={17} /> Open Verification Page
                 </button>
               </div>
 
@@ -439,40 +383,33 @@ export default function VerifyCertificate() {
                 </div>
               </div>
             </div>
-          </div>
+          </section>
         )}
 
-        {status === "invalid" && (
-          <div className="mx-auto mt-8 max-w-3xl overflow-hidden rounded-3xl border border-red-200 bg-white shadow-xl">
-            <div className="border-b border-red-100 bg-red-50 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-600">
-                  <XCircle size={26} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-red-500">
-                    Verification Result
-                  </p>
-                  <h2 className="text-xl font-extrabold text-red-800">
-                    Certificate Not Found
-                  </h2>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-7 text-center sm:px-8">
-              <p className="text-sm leading-6 text-slate-600">
-                The entered Certificate ID could not be verified. Please check
-                the ID and try again.
-              </p>
-              <p className="mt-3 text-xs font-medium text-slate-400">
-                Make sure the Certificate ID is entered exactly as printed on
-                the certificate.
-              </p>
-            </div>
+        {status === "idle" && (
+          <div className="mx-auto mt-8 max-w-3xl rounded-3xl border border-blue-100 bg-blue-50/70 p-5 text-center text-sm font-medium leading-6 text-slate-600">
+            You can share a direct verification link. Anyone opening that link
+            will automatically see the certificate result.
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+function InfoCard({ label, value, breakAll = false, className = "" }) {
+  return (
+    <div className={`rounded-2xl bg-slate-50 p-4 ${className}`}>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </p>
+      <div
+        className={`mt-1 text-sm font-extrabold text-slate-900 ${
+          breakAll ? "break-all" : ""
+        }`}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
