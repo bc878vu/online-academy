@@ -1,129 +1,227 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Award, CheckCircle2, Search, ShieldCheck, XCircle } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Search, ShieldCheck, XCircle, Award } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function VerifyCertificate() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [certificateId, setCertificateId] = useState(searchParams.get("id") || "");
-  const [record, setRecord] = useState(null);
-  const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [certificateId, setCertificateId] = useState("");
+  const [certificate, setCertificate] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [message, setMessage] = useState("");
 
-  const verify = async (rawId = certificateId) => {
-    const id = String(rawId || "").trim().toUpperCase();
-    setCertificateId(id);
-    setSearched(true);
-    setRecord(null);
+  const verifyCertificate = async (event) => {
+    event.preventDefault();
+
+    const id = certificateId.trim().toUpperCase();
+
     if (!id) {
-      setSearchParams({});
+      setCertificate(null);
+      setStatus("error");
+      setMessage("Please enter a Certificate ID.");
       return;
     }
 
-    setLoading(true);
     try {
-      const snapshot = await getDoc(doc(db, "certificates", id));
-      if (snapshot.exists()) {
-        setRecord({ id: snapshot.id, ...snapshot.data() });
+      setStatus("loading");
+      setMessage("");
+      setCertificate(null);
+
+      const certificateRef = doc(db, "certificates", id);
+      const certificateSnap = await getDoc(certificateRef);
+
+      if (!certificateSnap.exists()) {
+        setStatus("invalid");
+        setMessage("This Certificate ID is not registered in Online Academy.");
+        return;
       }
-      setSearchParams({ id });
+
+      const data = certificateSnap.data();
+
+      if (data.status !== "Valid") {
+        setStatus("invalid");
+        setMessage("This certificate is not currently valid.");
+        return;
+      }
+
+      setCertificate({
+        id: certificateSnap.id,
+        ...data,
+      });
+
+      setStatus("valid");
     } catch (error) {
       console.error("Certificate verification error:", error);
-      setRecord(null);
-    } finally {
-      setLoading(false);
+      setStatus("error");
+      setMessage(
+        "Unable to verify the certificate right now. Please try again."
+      );
     }
   };
 
-  useEffect(() => {
-    const id = searchParams.get("id");
-    if (id) verify(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const valid = Boolean(record?.status === "Valid");
-
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-10 sm:px-6 lg:px-8">
+    <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
-        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
-          <div className="bg-gradient-to-r from-[#0B2F6B] via-[#123E80] to-[#0B2F6B] px-6 py-8 text-center text-white sm:px-10">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-[#C9A227]/70 bg-white/10">
-              <ShieldCheck size={34} />
-            </div>
-            <h1 className="mt-5 text-2xl font-black sm:text-3xl">Certificate Verification</h1>
-            <p className="mt-2 text-sm text-blue-100">Verify an Online Academy certificate using its unique Certificate ID.</p>
+
+        <div className="text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+            <ShieldCheck size={32} />
           </div>
 
-          <div className="p-6 sm:p-10">
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                verify();
-              }}
-              className="flex flex-col gap-3 sm:flex-row"
-            >
-              <input
-                value={certificateId}
-                onChange={(event) => setCertificateId(event.target.value.toUpperCase())}
-                placeholder="Enter Certificate ID e.g. OA-XXXXXXXX-XXXXXXXX"
-                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold tracking-wide text-slate-800 outline-none ring-blue-100 focus:border-blue-500 focus:ring-4"
-                autoComplete="off"
-              />
-              <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-bold text-white shadow-md hover:bg-blue-700">
-                <Search size={18} /> Verify
-              </button>
-            </form>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
+            Online Academy
+          </p>
 
-            {loading && (
-              <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50 p-6 text-center text-sm font-semibold text-blue-700">
-                Checking certificate...
-              </div>
-            )}
+          <h1 className="mt-2 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Verify Certificate
+          </h1>
 
-            {!loading && searched && !record && certificateId && (
-              <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-                <XCircle size={42} className="mx-auto text-red-500" />
-                <h2 className="mt-4 text-xl font-extrabold text-red-800">Certificate Not Found</h2>
-                <p className="mt-2 text-sm text-red-700">This Certificate ID could not be found in the Online Academy verification registry.</p>
-              </div>
-            )}
-
-            {!loading && searched && !certificateId && (
-              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center text-sm font-semibold text-amber-800">
-                Please enter a Certificate ID first.
-              </div>
-            )}
-
-            {!loading && valid && (
-              <div className="mt-8 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50">
-                <div className="flex items-center gap-4 border-b border-emerald-200 px-5 py-5">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                    <CheckCircle2 size={27} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Verification Result</p>
-                    <h2 className="text-2xl font-black text-emerald-900">VALID CERTIFICATE</h2>
-                  </div>
-                </div>
-                <div className="grid gap-4 p-5 sm:grid-cols-2">
-                  <div><p className="text-xs font-bold uppercase text-slate-500">Student</p><p className="mt-1 font-bold text-slate-900">{record.studentName || "Student"}</p></div>
-                  <div><p className="text-xs font-bold uppercase text-slate-500">Course</p><p className="mt-1 font-bold text-slate-900">{record.courseTitle || "Online Course"}</p></div>
-                  <div><p className="text-xs font-bold uppercase text-slate-500">Issue Date</p><p className="mt-1 font-bold text-slate-900">{record.issueDate || "—"}</p></div>
-                  <div><p className="text-xs font-bold uppercase text-slate-500">Certificate ID</p><p className="mt-1 break-all font-bold text-slate-900">{record.id}</p></div>
-                </div>
-                <div className="flex items-center justify-center gap-2 border-t border-emerald-200 bg-white/60 px-5 py-4 text-sm font-bold text-emerald-800">
-                  <Award size={17} /> Issued and verified by Online Academy
-                </div>
-              </div>
-            )}
-
-            <div className="mt-8 text-center">
-              <Link to="/courses" className="text-sm font-bold text-blue-600 hover:text-blue-700">Browse Courses</Link>
-            </div>
-          </div>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">
+            Enter the Certificate ID printed on an Online Academy certificate
+            to verify its authenticity and current validity.
+          </p>
         </div>
+
+        <form
+          onSubmit={verifyCertificate}
+          className="mx-auto mt-8 max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-xl sm:p-7"
+        >
+          <label className="mb-2 block text-sm font-bold text-slate-800">
+            Certificate ID
+          </label>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={certificateId}
+              onChange={(e) => setCertificateId(e.target.value)}
+              placeholder="Example: OA-COURSE-USERID"
+              className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-semibold uppercase outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+            />
+
+            <button
+              type="submit"
+              disabled={status === "loading"}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Search size={18} />
+              {status === "loading" ? "Checking..." : "Verify"}
+            </button>
+          </div>
+
+          {message && (
+            <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {message}
+            </div>
+          )}
+        </form>
+
+        {status === "valid" && certificate && (
+          <div className="mt-8 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-xl">
+
+            <div className="bg-emerald-600 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 size={30} />
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-100">
+                    Verification Result
+                  </p>
+
+                  <h2 className="text-2xl font-extrabold">
+                    Certificate Valid
+                  </h2>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8">
+
+              <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <Award size={32} />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Certificate ID
+                  </p>
+                  <p className="mt-1 break-all text-sm font-extrabold text-slate-900">
+                    {certificate.id}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Status
+                  </p>
+                  <p className="mt-1 flex items-center gap-2 text-sm font-extrabold text-emerald-600">
+                    <CheckCircle2 size={17} />
+                    Valid
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Student
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-900">
+                    {certificate.studentName || "Online Academy Student"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Course
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-900">
+                    {certificate.courseTitle || "Online Course"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4 sm:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Issue Date
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-900">
+                    {certificate.issueDate || "—"}
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="mt-6 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                <ShieldCheck
+                  size={22}
+                  className="mt-0.5 shrink-0 text-emerald-600"
+                />
+
+                <p className="text-sm leading-6 text-emerald-800">
+                  This certificate is registered with Online Academy and
+                  its current status is <strong>Valid</strong>.
+                </p>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {status === "invalid" && (
+          <div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-red-200 bg-white p-8 text-center shadow-xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <XCircle size={34} />
+            </div>
+
+            <h2 className="mt-5 text-2xl font-extrabold text-slate-900">
+              Certificate Not Found
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              The entered Certificate ID could not be verified.
+              Please check the ID and try again.
+            </p>
+          </div>
+        )}
+
       </div>
     </main>
   );
