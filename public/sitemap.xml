@@ -1,19 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://online-academy-plum.vercel.app/</loc>
-    <lastmod>2026-08-14</lastmod>
-  </url>
-  <url>
-    <loc>https://online-academy-plum.vercel.app/courses</loc>
-    <lastmod>2026-08-14</lastmod>
-  </url>
-  <url>
-    <loc>https://online-academy-plum.vercel.app/verify-certificate</loc>
-    <lastmod>2026-08-14</lastmod>
-  </url>
-  <url>
-    <loc>https://online-academy-plum.vercel.app/verify-certificate?certificateId=OA-0MAMB7ZT-CKSBS3NG</loc>
-    <lastmod>2026-08-14</lastmod>
-  </url>
-</urlset>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://online-academy-plum.vercel.app/api/sitemap.xml</loc>
+  </sitemap>
+</sitemapindex>
