@@ -4,8 +4,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   getDocs,
-  orderBy,
-  query,
 } from "firebase/firestore";
 import {
   AlertCircle,
@@ -20,7 +18,6 @@ import {
   GraduationCap,
   Laptop,
   PlayCircle,
-  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -125,35 +122,148 @@ function getTimestampValue(value) {
   if (typeof value?.seconds === "number") return value.seconds * 1000;
   if (value instanceof Date) return value.getTime();
   if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
   return 0;
+}
+
+// Firestore course documents can contain arrays/objects (for example,
+// `lessons` is commonly an array of lesson objects). Never pass those
+// values directly into JSX text nodes because React will throw error #31.
+function toSafeText(value, fallback = "") {
+  if (value == null) return fallback;
+
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text || fallback;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => toSafeText(item))
+      .filter(Boolean)
+      .join(", ");
+    return text || fallback;
+  }
+
+  if (typeof value === "object") {
+    const candidate =
+      value.label ??
+      value.name ??
+      value.title ??
+      value.text ??
+      value.value ??
+      value.displayName;
+
+    return candidate != null
+      ? toSafeText(candidate, fallback)
+      : fallback;
+  }
+
+  return fallback;
 }
 
 function isVisibleCourse(course) {
   // Courses.jsx uses `published !== false` as its visibility rule.
-  // Home must use the same rule so both pages always show the same data.
+  // Home uses the same rule so both pages stay consistent.
   return course?.published !== false;
 }
 
 function getCourseTitle(course) {
-  return course?.title || course?.name || "Untitled Course";
+  return toSafeText(
+    course?.title ?? course?.name,
+    "Untitled Course"
+  );
 }
 
 function getCourseImage(course) {
-  return course?.imageUrl || course?.thumbnail || course?.image || "";
+  return toSafeText(
+    course?.imageUrl ?? course?.thumbnail ?? course?.image,
+    ""
+  );
+}
+
+function getCourseCategory(course) {
+  return toSafeText(course?.category, "Online Course");
 }
 
 function getCourseDescription(course) {
-  return (
-    course?.description ||
+  return toSafeText(
+    course?.description,
     "Start learning with this structured online course."
   );
 }
 
+function getCourseLevel(course) {
+  return toSafeText(course?.level, "Start Learning");
+}
+
+function getCourseDuration(course) {
+  const value = course?.duration;
+
+  if (typeof value === "number" || typeof value === "string") {
+    return toSafeText(value);
+  }
+
+  if (value && typeof value === "object") {
+    return toSafeText(
+      value.label ??
+        value.text ??
+        value.value ??
+        value.duration ??
+        value.hours ??
+        value.minutes,
+      ""
+    );
+  }
+
+  return "";
+}
+
+function getLessonCount(course) {
+  const lessons = course?.lessons;
+
+  if (Array.isArray(lessons)) return lessons.length;
+
+  if (typeof lessons === "number" && Number.isFinite(lessons)) {
+    return lessons;
+  }
+
+  if (typeof lessons === "string" && lessons.trim()) {
+    const numeric = Number(lessons);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  if (lessons && typeof lessons === "object") {
+    const count = Number(
+      lessons.count ??
+        lessons.total ??
+        lessons.length ??
+        lessons.lessonCount
+    );
+
+    if (Number.isFinite(count) && count >= 0) return count;
+  }
+
+  const fallback = Number(course?.lessonCount);
+  return Number.isFinite(fallback) && fallback >= 0 ? fallback : null;
+}
+
 function formatPrice(course) {
   const isPaid = course?.isPaid === true;
-  const price = Number(course?.price || 0);
+  const rawPrice = course?.price;
+  const price =
+    typeof rawPrice === "number"
+      ? rawPrice
+      : Number(toSafeText(rawPrice, "0"));
 
-  if (!isPaid || price <= 0) return "Free";
+  if (!isPaid || !Number.isFinite(price) || price <= 0) return "Free";
   return `Rs. ${price.toLocaleString()}`;
 }
 
@@ -198,23 +308,13 @@ function Home() {
 
       try {
         const coursesRef = collection(db, "courses");
-        let snapshot;
 
-        // Try the same ordering used by Courses.jsx first.
-        try {
-          const coursesQuery = query(
-            coursesRef,
-            orderBy("createdAt", "desc")
-          );
-          snapshot = await getDocs(coursesQuery);
-        } catch (orderError) {
-          // A missing createdAt value/index must not make Home empty.
-          console.warn(
-            "Home createdAt ordering failed. Loading courses without ordering.",
-            orderError
-          );
-          snapshot = await getDocs(coursesRef);
-        }
+        // Home intentionally reads the collection without an orderBy query.
+        // This avoids two common Firestore problems: documents missing
+        // `createdAt` being excluded by orderBy, and a required composite
+        // index preventing the homepage from rendering. We sort safely in
+        // memory afterwards, which is ideal for the small homepage preview.
+        const snapshot = await getDocs(coursesRef);
 
         if (cancelled) return;
 
@@ -278,7 +378,7 @@ function Home() {
     return Array.from(
       new Set(
         courses
-          .map((course) => course.category)
+          .map((course) => getCourseCategory(course))
           .filter(Boolean)
       )
     );
@@ -293,10 +393,10 @@ function Home() {
       .filter((course) => {
         const searchable = [
           getCourseTitle(course),
-          course.category,
-          course.description,
-          course.instructor,
-          course.level,
+          getCourseCategory(course),
+          getCourseDescription(course),
+          toSafeText(course.instructor),
+          getCourseLevel(course),
         ]
           .filter(Boolean)
           .join(" ")
@@ -311,7 +411,7 @@ function Home() {
     if (!courses.length) return DEFAULT_SLIDES;
 
     const featuredSlides = courses.slice(0, 2).map((course) => ({
-      eyebrow: course.category || "FEATURED COURSE",
+      eyebrow: getCourseCategory(course),
       title: getCourseTitle(course),
       highlight: "Learn at your pace.",
       description: getCourseDescription(course),
@@ -641,7 +741,7 @@ function Home() {
                             {getCourseTitle(course)}
                           </p>
                           <p className="truncate text-xs text-slate-500">
-                            {course.category || "Online Course"}
+                            {getCourseCategory(course)}
                           </p>
                         </div>
 
@@ -702,7 +802,7 @@ function Home() {
 
       {/* ==================================================
           COURSES
-      ================================================== */}
+      ================================================== */
 
       <section
         id="courses"
@@ -777,6 +877,8 @@ function Home() {
                 const image = getCourseImage(course);
                 const title = getCourseTitle(course);
                 const description = getCourseDescription(course);
+                const duration = getCourseDuration(course);
+                const lessonCount = getLessonCount(course);
 
                 return (
                   <Link
@@ -805,7 +907,7 @@ function Home() {
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
 
                       <div className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm">
-                        {course.category || "Online Course"}
+                        {getCourseCategory(course)}
                       </div>
 
                       <div className="absolute bottom-4 right-4 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur">
@@ -816,7 +918,7 @@ function Home() {
                     <div className="flex flex-1 flex-col p-5 sm:p-6">
                       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-blue-600">
                         <GraduationCap size={15} />
-                        {course.level || "Start Learning"}
+                        {getCourseLevel(course)}
                       </div>
 
                       <h3 className="mt-3 line-clamp-2 text-xl font-extrabold leading-tight text-slate-900">
@@ -828,19 +930,19 @@ function Home() {
                       </p>
 
                       <div className="mt-auto flex flex-wrap gap-3 border-t border-slate-100 pt-5 text-xs font-medium text-slate-500">
-                        {course.duration && (
+                        {duration && (
                           <span className="flex items-center gap-1.5">
                             <Clock3 size={15} />
-                            {course.duration}
+                            {duration}
                           </span>
                         )}
-                        {course.lessons && (
+                        {lessonCount != null && (
                           <span className="flex items-center gap-1.5">
                             <BookOpen size={15} />
-                            {course.lessons} lessons
+                            {lessonCount} {lessonCount === 1 ? "lesson" : "lessons"}
                           </span>
                         )}
-                        {!course.duration && !course.lessons && (
+                        {!duration && lessonCount == null && (
                           <span className="flex items-center gap-1.5">
                             <PlayCircle size={15} />
                             Start learning
@@ -885,7 +987,7 @@ function Home() {
 
       {/* ==================================================
           FEATURES
-      ================================================== */}
+      ================================================== */
 
       <section className="bg-white px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -931,7 +1033,7 @@ function Home() {
 
       {/* ==================================================
           LEARNING AREAS
-      ================================================== */}
+      ================================================== */
 
       <section className="bg-slate-50 px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -961,7 +1063,7 @@ function Home() {
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {categories.slice(0, 6).map((category) => {
                 const count = courses.filter(
-                  (course) => course.category === category
+                  (course) => getCourseCategory(course) === category
                 ).length;
 
                 return (
@@ -1002,7 +1104,7 @@ function Home() {
 
       {/* ==================================================
           HOW IT WORKS
-      ================================================== */}
+      ================================================== */
 
       <section className="bg-slate-950 px-5 py-20 text-white sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -1044,7 +1146,7 @@ function Home() {
 
       {/* ==================================================
           BENEFITS
-      ================================================== */}
+      ================================================== */
 
       <section className="bg-white px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -1083,7 +1185,7 @@ function Home() {
 
       {/* ==================================================
           CTA
-      ================================================== */}
+      ================================================== */
 
       <section className="px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="oa-cta mx-auto max-w-5xl overflow-hidden rounded-3xl px-7 py-12 text-center text-white shadow-xl sm:px-12 sm:py-16">
