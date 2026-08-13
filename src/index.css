@@ -18,21 +18,21 @@ body {
 
 /* ======================================================
    CERTIFICATE PRINT
-   - Full single-page landscape certificate
-   - Works with Chrome/Android Save as PDF
-   - Forces Letter landscape to match the mobile print preview
+   - One complete landscape page
+   - Fits the actual print paper instead of forcing 11in/8.5in
+   - Keeps every certificate element inside the printable area
    - Hides website navigation/footer while printing
 ====================================================== */
 @media print {
   @page {
-    size: Letter landscape;
+    size: landscape;
     margin: 0;
   }
 
   html,
   body {
-    width: 11in !important;
-    height: 8.5in !important;
+    width: 100% !important;
+    height: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
     margin: 0 !important;
@@ -58,8 +58,8 @@ body {
   .certificate-print-root {
     position: static !important;
     display: block !important;
-    width: 11in !important;
-    height: 8.5in !important;
+    width: 100% !important;
+    height: 100% !important;
     min-height: 0 !important;
     max-width: none !important;
     margin: 0 !important;
@@ -69,20 +69,20 @@ body {
   }
 
   .certificate-print-root > div {
-    width: 11in !important;
-    height: 8.5in !important;
+    width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
   .certificate-sheet {
-    width: 11in !important;
-    height: 8.5in !important;
-    min-height: 8.5in !important;
-    max-height: 8.5in !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
     margin: 0 !important;
-    padding: 0.22in !important;
+    padding: 0.18in !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -97,10 +97,10 @@ body {
 
   .certificate-sheet-inner {
     width: 100% !important;
-    height: 8.06in !important;
-    min-height: 8.06in !important;
-    max-height: 8.06in !important;
-    padding: 0.28in !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 0.24in !important;
     overflow: hidden !important;
     display: flex !important;
     align-items: center !important;
@@ -180,6 +180,6 @@ body {
   }
 
   .certificate-sheet-inner .lg\\:p-14 {
-    padding: 0.28in !important;
+    padding: 0.24in !important;
   }
 }
