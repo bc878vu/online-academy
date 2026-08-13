@@ -49,9 +49,11 @@ export default function CourseAssessments() {
   const finalAttempt = user ? loadAttempt(user.uid, courseId, "final", "final-exam") : null;
   const courseComplete = allLecturesComplete && (!finalRequired || finalAttempt?.passed === true);
 
+  // IMPORTANT: keep this hook before the conditional return below.
+  // React error #310 was caused by the hook being skipped while course/user was loading.
   useEffect(() => {
-    if (!user || !courseComplete) return;
-    const completion = { userId: user.uid, courseId, courseTitle: course?.title || "", completedAt: new Date().toISOString(), completionRule: finalRequired ? "final_exam_passed" : "lecture_completion_only" };
+    if (!user || !course || !courseComplete) return;
+    const completion = { userId: user.uid, courseId, courseTitle: course.title || "", completedAt: new Date().toISOString(), completionRule: finalRequired ? "final_exam_passed" : "lecture_completion_only" };
     try { localStorage.setItem(`oa_course_completion_${user.uid}_${courseId}`, JSON.stringify(completion)); } catch {}
     setDoc(doc(db, "courseCompletions", `${user.uid}_${courseId}`), { ...completion, completedAt: serverTimestamp() }, { merge: true }).catch(() => {});
   }, [courseComplete, courseId, course?.title, finalRequired, user]);
