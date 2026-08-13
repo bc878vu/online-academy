@@ -16,16 +16,23 @@ body {
   color: #0f172a;
 }
 
-/* Certificate print: print only the certificate on one A4 page. */
+/* ======================================================
+   CERTIFICATE PRINT
+   - A4 landscape
+   - Exactly one page
+   - Hide the app chrome/footer while printing
+   - Keep the certificate centered and professional
+====================================================== */
 @media print {
   @page {
-    size: A4 portrait;
+    size: A4 landscape;
     margin: 0;
   }
 
   html,
   body {
-    width: 100%;
+    width: 297mm;
+    height: 210mm;
     min-width: 0;
     margin: 0 !important;
     padding: 0 !important;
@@ -43,10 +50,10 @@ body {
   }
 
   .certificate-print-root {
-    position: absolute !important;
+    position: fixed !important;
     inset: 0 !important;
-    width: 100% !important;
-    height: 100vh !important;
+    width: 297mm !important;
+    height: 210mm !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -54,23 +61,116 @@ body {
     overflow: hidden !important;
   }
 
-  .certificate-sheet {
-    width: 100% !important;
-    height: 100vh !important;
-    min-height: 0 !important;
+  .certificate-print-root > div {
+    width: 297mm !important;
+    max-width: none !important;
+    height: 210mm !important;
     margin: 0 !important;
-    padding: 14mm !important;
+    padding: 0 !important;
+  }
+
+  .certificate-sheet {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 210mm !important;
+    margin: 0 !important;
+    padding: 8mm !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: hidden !important;
     page-break-after: avoid !important;
+    page-break-before: avoid !important;
     break-after: avoid-page !important;
+    break-before: avoid-page !important;
+    break-inside: avoid !important;
   }
 
   .certificate-sheet-inner {
-    height: 100% !important;
-    min-height: 0 !important;
+    width: 100% !important;
+    height: 194mm !important;
+    min-height: 194mm !important;
+    max-height: 194mm !important;
+    padding: 8mm !important;
     overflow: hidden !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-width: 3px !important;
+    break-inside: avoid !important;
+  }
+
+  .certificate-sheet-inner > div.relative {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .certificate-sheet-inner h1 {
+    margin-top: 8px !important;
+    font-size: 34px !important;
+    line-height: 1.1 !important;
+  }
+
+  .certificate-sheet-inner h2 {
+    margin-top: 10px !important;
+    font-size: 27px !important;
+    line-height: 1.15 !important;
+  }
+
+  .certificate-sheet-inner h3 {
+    margin-top: 6px !important;
+    font-size: 22px !important;
+    line-height: 1.2 !important;
+  }
+
+  .certificate-sheet-inner .mt-4 {
+    margin-top: 8px !important;
+  }
+
+  .certificate-sheet-inner .mt-7 {
+    margin-top: 14px !important;
+  }
+
+  .certificate-sheet-inner .mt-8 {
+    margin-top: 16px !important;
+  }
+
+  .certificate-sheet-inner .mt-3 {
+    margin-top: 6px !important;
+  }
+
+  .certificate-sheet-inner .p-3,
+  .certificate-sheet-inner .sm\:p-4 {
+    padding: 8px !important;
+  }
+
+  .certificate-sheet-inner .sm\:h-16 {
+    height: 52px !important;
+    width: 52px !important;
+  }
+
+  .certificate-sheet-inner .sm\:h-20 {
+    height: 64px !important;
+    width: 64px !important;
+  }
+
+  .certificate-sheet-inner .sm\:w-44 {
+    width: 150px !important;
+  }
+
+  .certificate-sheet-inner .sm\:text-sm {
+    font-size: 12px !important;
+  }
+
+  .certificate-sheet-inner .sm\:text-xs {
+    font-size: 10px !important;
+  }
+
+  .certificate-sheet-inner .sm\:gap-8 {
+    gap: 18px !important;
+  }
+
+  .certificate-sheet-inner .lg\:p-14 {
+    padding: 8mm !important;
   }
 }
