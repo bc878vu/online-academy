@@ -72,96 +72,47 @@ footer .flex.items-center.gap-2 > div:first-child::before {
 
 /* Certificate printing: use the complete browser print area and keep the certificate on exactly one page. */
 @media print {
-  @page {
-    size: landscape;
-    margin: 0;
-  }
+  @page { size: landscape; margin: 0; }
+  html, body { width: 100% !important; height: 100% !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; overflow: hidden !important; }
+  header, footer, nav, .print\:hidden { display: none !important; }
+  .certificate-print-root { display: block !important; width: 100vw !important; height: 100vh !important; min-height: 0 !important; margin: 0 !important; padding: 3.5vh 3.5vw !important; background: #fff !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .certificate-print-root > div { width: 100% !important; height: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  .certificate-sheet { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; border: 0 !important; box-shadow: none !important; overflow: hidden !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+  .certificate-sheet-inner { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 4.5% 5.5% !important; border: 1px solid #d8e1ef !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+  .certificate-header-mark { width: clamp(42px, 5vw, 54px) !important; height: clamp(42px, 5vw, 54px) !important; }
+  .certificate-watermark { font-size: clamp(110px, 15vw, 170px) !important; }
+  .certificate-signatures { margin-top: 2.5% !important; }
+  .certificate-verified { margin-top: 1.5% !important; }
+  .certificate-verification { margin-top: .6% !important; }
+}
 
-  html,
-  body {
-    width: 100% !important;
-    height: 100% !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-    overflow: hidden !important;
-  }
+/* Responsive navigation refinement: keep key pages visible and move secondary pages into the menu. */
+@media (min-width: 1024px) {
+  header nav > div.hidden > div:first-child > a:nth-of-type(4),
+  header nav > div.hidden > div:first-child > a:nth-of-type(5) { display: none !important; }
 
-  header,
-  footer,
-  nav,
-  .print\:hidden {
-    display: none !important;
-  }
+  /* On desktop the same compact menu button is used for secondary navigation. */
+  header nav > button[aria-label*="navigation menu"] { display: flex !important; }
 
-  .certificate-print-root {
-    display: block !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 3.5vh 3.5vw !important;
-    background: #fff !important;
-    overflow: hidden !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+  /* Existing secondary menu opens as a professional desktop popover. */
+  header + div.fixed.inset-0 { display: block !important; }
+  header + div.fixed.inset-0 > div { top: 84px !important; left: auto !important; right: 28px !important; width: 360px !important; max-height: calc(100vh - 105px) !important; }
+}
 
-  .certificate-print-root > div {
-    width: 100% !important;
-    height: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+@media (max-width: 1023px) {
+  /* Mobile/tablet: keep Home, Courses and Certificate visible in a compact quick-nav row. */
+  header nav > div.hidden { display: flex !important; position: absolute !important; left: 12px !important; right: 64px !important; top: 100% !important; align-items: center !important; gap: 4px !important; padding: 7px 0 !important; overflow-x: auto !important; background: transparent !important; border: 0 !important; }
+  header nav > div.hidden > div:first-child { display: flex !important; align-items: center !important; gap: 4px !important; padding: 0 !important; border: 0 !important; background: transparent !important; }
+  header nav > div.hidden > div:first-child > a { display: inline-flex !important; white-space: nowrap !important; min-height: 36px !important; padding: 0 11px !important; border-radius: 10px !important; background: #f8fafc !important; border: 1px solid #e2e8f0 !important; font-size: 11px !important; }
+  header nav > div.hidden > div:first-child > a:nth-of-type(4),
+  header nav > div.hidden > div:first-child > a:nth-of-type(5) { display: none !important; }
+  header nav > div.hidden > div:last-child { display: none !important; }
+  header nav { position: relative !important; }
+  header { margin-bottom: 48px !important; }
+  header + div.fixed.inset-0 { display: block !important; }
+  header + div.fixed.inset-0 > div { top: 126px !important; }
+}
 
-  .certificate-sheet {
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    overflow: hidden !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .certificate-sheet-inner {
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 4.5% 5.5% !important;
-    border: 1px solid #d8e1ef !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    overflow: hidden !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .certificate-header-mark {
-    width: clamp(42px, 5vw, 54px) !important;
-    height: clamp(42px, 5vw, 54px) !important;
-  }
-
-  .certificate-watermark {
-    font-size: clamp(110px, 15vw, 170px) !important;
-  }
-
-  .certificate-signatures {
-    margin-top: 2.5% !important;
-  }
-
-  .certificate-verified {
-    margin-top: 1.5% !important;
-  }
-
-  .certificate-verification {
-    margin-top: .6% !important;
-  }
+@media (min-width: 640px) and (max-width: 1023px) {
+  header { margin-bottom: 50px !important; }
 }
