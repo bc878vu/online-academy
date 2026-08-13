@@ -105,10 +105,7 @@ export default function Certificate() {
         const results = [];
 
         for (const courseId of courseIds) {
-          const courseSnapshot = await getDoc(
-            doc(db, "courses", courseId)
-          );
-
+          const courseSnapshot = await getDoc(doc(db, "courses", courseId));
           if (!courseSnapshot.exists()) continue;
 
           const course = {
@@ -170,9 +167,7 @@ export default function Certificate() {
 
   const selectedCourse = useMemo(
     () =>
-      completedCourses.find(
-        (course) => course.id === selectedCourseId
-      ) || null,
+      completedCourses.find((course) => course.id === selectedCourseId) || null,
     [completedCourses, selectedCourseId]
   );
 
@@ -203,9 +198,7 @@ export default function Certificate() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
             <Lock size={30} />
           </div>
-          <h1 className="mt-6 text-2xl font-extrabold text-slate-900">
-            Login Required
-          </h1>
+          <h1 className="mt-6 text-2xl font-extrabold text-slate-900">Login Required</h1>
           <p className="mt-3 text-sm leading-7 text-slate-600">
             Only logged-in students can access and download their certificates.
           </p>
@@ -314,99 +307,96 @@ export default function Certificate() {
 
         {selectedCourse && (
           <div className="certificate-sheet overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-2 shadow-xl print:rounded-none print:border-0 print:p-0 print:shadow-none">
-            <div className="certificate-sheet-inner relative border-4 border-blue-600 p-6 sm:p-10 lg:p-14">
-              <div className="pointer-events-none absolute inset-3 border border-blue-200" />
+            <div className="certificate-sheet-inner relative border-4 border-blue-700 p-6 sm:p-10 lg:p-14">
+              <div className="certificate-corner certificate-corner-tl" />
+              <div className="certificate-corner certificate-corner-tr" />
+              <div className="certificate-corner certificate-corner-bl" />
+              <div className="certificate-corner certificate-corner-br" />
+              <div className="certificate-top-band" />
+              <div className="certificate-bottom-band" />
+              <div className="certificate-watermark">OA</div>
 
-              <div className="relative text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg sm:h-16 sm:w-16">
-                  <GraduationCap size={32} />
+              <div className="certificate-content relative text-center">
+                <div className="certificate-header-mark mx-auto flex items-center justify-center">
+                  <GraduationCap size={32} strokeWidth={2.3} />
                 </div>
 
-                <p className="mt-4 text-xs font-bold uppercase tracking-[0.28em] text-blue-600 sm:text-sm">
-                  Online Academy
+                <div className="mt-3 flex items-center justify-center gap-3">
+                  <span className="certificate-rule" />
+                  <p className="certificate-kicker">ONLINE ACADEMY</p>
+                  <span className="certificate-rule" />
+                </div>
+
+                <p className="certificate-official-label mt-2">
+                  OFFICIAL ACADEMIC CERTIFICATE
                 </p>
 
-                <h1 className="mt-3 text-3xl font-black text-slate-900 sm:text-4xl lg:text-5xl">
+                <h1 className="certificate-title mt-2">
                   Certificate of Completion
                 </h1>
 
-                <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-500">
+                <div className="certificate-title-line mx-auto mt-2" />
+
+                <p className="certificate-presented mt-3">
                   This certificate is proudly presented to
                 </p>
 
-                <h2 className="mt-4 break-words text-2xl font-extrabold text-slate-900 sm:text-3xl lg:text-4xl">
+                <h2 className="certificate-student mt-2 break-words">
                   {user.displayName || user.email || "Student"}
                 </h2>
 
-                <p className="mt-4 text-sm text-slate-500">
+                <p className="certificate-presented mt-2">
                   for successfully completing
                 </p>
 
-                <h3 className="mt-2 break-words text-xl font-bold text-blue-700 sm:text-2xl lg:text-3xl">
+                <h3 className="certificate-course mt-1 break-words">
                   {selectedCourse.title}
                 </h3>
 
-                <div className="mx-auto mt-7 grid max-w-2xl gap-3 text-left sm:grid-cols-3 sm:gap-5">
-                  <div className="rounded-xl bg-slate-50 p-3 sm:p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
-                      Certificate ID
-                    </p>
-                    <p className="mt-1 break-all text-xs font-bold text-slate-800 sm:text-sm">
-                      {getCertificateId(user.uid, selectedCourse.id)}
-                    </p>
+                <div className="certificate-meta mx-auto mt-4 grid max-w-3xl gap-2 text-left sm:grid-cols-3">
+                  <div className="certificate-meta-card">
+                    <p>Certificate ID</p>
+                    <strong>{getCertificateId(user.uid, selectedCourse.id)}</strong>
                   </div>
-
-                  <div className="rounded-xl bg-slate-50 p-3 sm:p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
-                      Issue Date
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-slate-800 sm:text-sm">
-                      {formatDate()}
-                    </p>
+                  <div className="certificate-meta-card">
+                    <p>Issue Date</p>
+                    <strong>{formatDate()}</strong>
                   </div>
-
-                  <div className="rounded-xl bg-slate-50 p-3 sm:p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
-                      Status
-                    </p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 sm:text-sm">
-                      <ShieldCheck size={16} /> Valid
-                    </p>
+                  <div className="certificate-meta-card">
+                    <p>Status</p>
+                    <strong className="certificate-valid">
+                      <ShieldCheck size={15} /> Valid
+                    </strong>
                   </div>
                 </div>
 
-                <div className="mt-8 flex flex-col items-center justify-between gap-6 sm:flex-row sm:items-end sm:gap-8">
-                  <div className="text-center sm:text-left">
-                    <div className="mx-auto h-px w-40 bg-slate-300 sm:mx-0 sm:w-44" />
-                    <p className="mt-2 text-xs font-bold text-slate-700 sm:text-sm">
-                      Online Academy
-                    </p>
-                    <p className="text-[10px] text-slate-400 sm:text-xs">
-                      Authorized Issuer
-                    </p>
+                <div className="certificate-signatures mt-4 flex items-end justify-between gap-5">
+                  <div className="certificate-signature text-left">
+                    <div className="certificate-signature-line" />
+                    <p>Online Academy</p>
+                    <span>Authorized Issuer</span>
                   </div>
 
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-blue-100 bg-blue-50 text-blue-600 sm:h-20 sm:w-20">
-                    <Award size={34} />
+                  <div className="certificate-seal flex shrink-0 items-center justify-center">
+                    <div className="certificate-seal-inner">
+                      <Award size={30} />
+                      <span>VERIFIED</span>
+                    </div>
                   </div>
 
-                  <div className="text-center sm:text-right">
-                    <div className="mx-auto h-px w-40 bg-slate-300 sm:mx-0 sm:w-44" />
-                    <p className="mt-2 text-xs font-bold text-slate-700 sm:text-sm">
-                      Verified Certificate
-                    </p>
-                    <p className="text-[10px] text-slate-400 sm:text-xs">
-                      Online Academy
-                    </p>
+                  <div className="certificate-signature text-right">
+                    <div className="certificate-signature-line" />
+                    <p>Verified Certificate</p>
+                    <span>Online Academy</span>
                   </div>
                 </div>
 
-                <div className="mt-7 flex items-center justify-center gap-2 text-xs text-emerald-600">
+                <div className="certificate-verified mt-3 flex items-center justify-center gap-2">
                   <CheckCircle2 size={15} />
                   Course completion verified from your learning progress.
                 </div>
 
-                <p className="mt-3 text-[10px] text-slate-400 sm:text-xs">
+                <p className="certificate-verification mt-1">
                   Verify this certificate using its Certificate ID through the Online Academy platform.
                 </p>
               </div>
