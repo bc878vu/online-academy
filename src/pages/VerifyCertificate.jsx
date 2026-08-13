@@ -794,4 +794,57 @@ export default function VerifyCertificate() {
         {status === "invalid" && (
 
           <div className="mx-auto mt-8 max-w-3xl overflow-hidden rounded-3xl border border-red-200 bg-white shadow-xl">
-          
+
+            <div className="border-b border-red-100 bg-red-50 px-6 py-5">
+
+              <div className="flex items-center gap-3">
+
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-600">
+
+                  <XCircle
+                    size={26}
+                  />
+
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-500">
+                    Verification Result
+                  </p>
+
+                  <h2 className="text-xl font-extrabold text-red-800">
+                    Certificate Not Found
+                  </h2>
+
+                </div>
+
+              </div>
+
+            </div>
+
+            <div className="px-6 py-7 text-center sm:px-8">
+
+              <p className="text-sm leading-6 text-slate-600">
+                The entered Certificate ID could
+                not be verified. Please check the
+                ID and try again.
+              </p>
+
+              <p className="mt-3 text-xs font-medium text-slate-400">
+                Make sure the Certificate ID is
+                entered exactly as printed on the
+                certificate.
+              </p>
+
+            </div>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </main>
+  );
+}
