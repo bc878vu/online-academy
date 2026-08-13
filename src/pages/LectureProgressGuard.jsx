@@ -30,6 +30,12 @@ function getLessonIndexFromDom() {
   return match ? Number(match[1]) - 1 : null;
 }
 
+function getNextLessonButton() {
+  return Array.from(document.querySelectorAll("button")).find((button) =>
+    (button.textContent || "").trim().includes("Next Lesson")
+  );
+}
+
 function getActiveVideo() {
   const video = document.querySelector("video");
   if (video) return { type: "html5", player: video };
@@ -62,6 +68,7 @@ export default function LectureProgressGuard({ children }) {
   const lessonsRef = useRef([]);
   const recordsRef = useRef({});
   const lastLessonIdRef = useRef("");
+  const autoAdvancedLessonRef = useRef("");
   const earnedRef = useRef(0);
   const durationRef = useRef(0);
   const lastMediaTimeRef = useRef(null);
@@ -101,7 +108,9 @@ export default function LectureProgressGuard({ children }) {
           : null;
 
         lessonsRef.current = Array.isArray(courseRef.current?.lessons)
-          ? courseRef.current.lessons
+          ? [...courseRef.current.lessons].sort(
+              (a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0)
+            )
           : [];
 
         const map = {};
@@ -133,9 +142,33 @@ export default function LectureProgressGuard({ children }) {
       const lessonIndex = getLessonIndexFromDom();
       const lesson =
         lessonIndex == null ? null : lessonsRef.current[lessonIndex];
-      const media = getActiveVideo();
 
-      if (!lesson || !media) return;
+      if (!lesson) return;
+
+      // A lecture that has already reached the verified 25% attendance
+      // threshold is permanently complete for this user. When the user
+      // returns to the course later, do not make them watch that same lecture
+      // again; automatically move them to the next incomplete lecture.
+      const savedRecord = recordsRef.current[lesson.id] || {};
+      const alreadyCompleted = savedRecord.completed25 === true;
+      const lastLesson = lessonIndex >= lessonsRef.current.length - 1;
+      const nextButton = getNextLessonButton();
+
+      if (alreadyCompleted && !lastLesson) {
+        if (nextButton) {
+          nextButton.disabled = false;
+          nextButton.title = "Already completed — continue to next lecture";
+
+          if (autoAdvancedLessonRef.current !== lesson.id) {
+            autoAdvancedLessonRef.current = lesson.id;
+            nextButton.click();
+            return;
+          }
+        }
+      }
+
+      const media = getActiveVideo();
+      if (!media) return;
 
       if (lesson.id !== lastLessonIdRef.current) {
         lastLessonIdRef.current = lesson.id;
@@ -265,18 +298,14 @@ export default function LectureProgressGuard({ children }) {
 
       // The original player remains intact; this only enforces the verified
       // attendance threshold on the existing Next Lesson control.
-      const nextButton = Array.from(
-        document.querySelectorAll("button")
-      ).find((button) =>
-        (button.textContent || "").trim().includes("Next Lesson")
-      );
+      const currentNextButton = getNextLessonButton();
 
-      if (nextButton) {
-        const lastLesson =
+      if (currentNextButton) {
+        const isLastLesson =
           lessonIndex >= lessonsRef.current.length - 1;
 
-        nextButton.disabled = lastLesson || !completed25;
-        nextButton.title = completed25
+        currentNextButton.disabled = isLastLesson || !completed25;
+        currentNextButton.title = completed25
           ? "Next lesson"
           : `Watch ${WATCH_REQUIREMENT}% first`;
       }
