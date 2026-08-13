@@ -20,7 +20,9 @@ import {
 // ======================================================
 
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
 } from "firebase/firestore";
 
 // ======================================================
@@ -30,7 +32,6 @@ import {
 import {
   getStorage,
 } from "firebase/storage";
-
 
 // ======================================================
 // FIREBASE CONFIGURATION
@@ -46,7 +47,6 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-
 // ======================================================
 // CONFIG VALIDATION
 // ======================================================
@@ -60,9 +60,7 @@ const requiredFirebaseConfig = {
   appId: firebaseConfig.appId,
 };
 
-const missingFirebaseConfig = Object.entries(
-  requiredFirebaseConfig
-)
+const missingFirebaseConfig = Object.entries(requiredFirebaseConfig)
   .filter(([, value]) => !value)
   .map(([key]) => key);
 
@@ -78,13 +76,19 @@ if (missingFirebaseConfig.length > 0) {
 
 const app = initializeApp(firebaseConfig);
 
+// Firestore persistence reduces repeat network reads, improves repeat
+// navigation and gives the app a resilient local cache across tabs.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
 
 // ======================================================
 // FIREBASE AUTH
 // ======================================================
 
 export const auth = getAuth(app);
-
 
 // ======================================================
 // AUTH PERSISTENCE
@@ -93,7 +97,6 @@ export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.error("Firebase persistence setup failed:", error);
 });
-
 
 // ======================================================
 // GOOGLE AUTH PROVIDER
@@ -105,15 +108,11 @@ googleProvider.setCustomParameters({
   prompt: "select_account",
 });
 
-export const db = getFirestore(app);
-
-
 // ======================================================
 // FIREBASE STORAGE
 // ======================================================
 
 export const storage = getStorage(app);
-
 
 // ======================================================
 // DEFAULT EXPORT
