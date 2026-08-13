@@ -1,3 +1,4 @@
+import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import {
   collection,
@@ -54,6 +55,7 @@ function isScreenActive() {
 }
 
 export default function LectureProgressGuard({ children }) {
+  const location = useLocation();
   const [user, setUser] = useState(undefined);
 
   const courseRef = useRef(null);
@@ -300,6 +302,22 @@ export default function LectureProgressGuard({ children }) {
       window.removeEventListener("blur", tick);
     };
   }, [user]);
+
+  // Public course pages stay visible to everyone, but opening a lesson/course
+  // is a student action. Keep the public catalogue accessible and send a
+  // logged-out visitor to the normal Login page instead of allowing the
+  // protected lecture screen to render without an authenticated user.
+  if (user === undefined) return children;
+
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
+  }
 
   return children;
 }
