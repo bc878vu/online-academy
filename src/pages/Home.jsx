@@ -1,1052 +1,131 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { collection, getDocs } from "firebase/firestore";
+import { ArrowRight, Award, BarChart3, BookOpen, CheckCircle2, Clock3, GraduationCap, Laptop, PlayCircle, ShieldCheck, Sparkles, Star, Target, Users } from "lucide-react";
+import { auth, db } from "../firebase";
 
-import {
-  ArrowRight,
-  BookOpen,
-  Users,
-  Award,
-  PlayCircle,
-  CheckCircle,
-  GraduationCap,
-  Laptop,
-  Clock3,
-  BarChart3,
-  Sparkles,
-  ShieldCheck,
-  Smartphone,
-  Target,
-} from "lucide-react";
+const COURSE_COLLECTION = "courses";
 
-import { auth } from "../firebase";
+const benefits = [
+  [BookOpen, "Structured Courses", "Organized lessons and learning resources in one simple place."],
+  [BarChart3, "Progress Tracking", "See completed lessons and continue your learning journey."],
+  [Laptop, "Learn Anywhere", "Use your phone, tablet or computer whenever it suits you."],
+  [ShieldCheck, "Secure Learning", "Your account and learning progress stay connected to your profile."],
+];
 
-
-// ======================================================
-// HOME PAGE
-// ======================================================
+const fallbackCourses = [
+  { id: "preview-1", title: "Explore Our Courses", description: "Choose a structured course and start learning at your own pace.", category: "Featured Learning", level: "All Levels", duration: "Self-paced" },
+  { id: "preview-2", title: "Build Practical Skills", description: "Learn with organized lessons, resources and progress tracking.", category: "Skill Development", level: "All Levels", duration: "Flexible" },
+  { id: "preview-3", title: "Track Your Progress", description: "Continue from where you stopped and complete your learning goals.", category: "Learning Journey", level: "All Levels", duration: "Anytime" },
+];
 
 function Home() {
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const isLoggedIn = Boolean(auth.currentUser);
 
-  // ====================================================
-  // CURRENT AUTHENTICATED USER
-  //
-  // Auth state is handled by App.jsx.
-  // This page does NOT create another auth listener.
-  // ====================================================
+  useEffect(() => {
+    let mounted = true;
+    getDocs(collection(db, COURSE_COLLECTION))
+      .then((snap) => {
+        if (!mounted) return;
+        setCourses(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => c.published !== false));
+      })
+      .catch((err) => console.error("Home courses:", err))
+      .finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, []);
 
-  const user = auth.currentUser;
+  const featured = useMemo(() => courses.length ? courses.slice(0, 3) : fallbackCourses, [courses]);
+  const lessons = useMemo(() => courses.reduce((n, c) => n + (Array.isArray(c.lessons) ? c.lessons.length : 0), 0), [courses]);
+  const areas = useMemo(() => new Set(courses.map((c) => c.category).filter(Boolean)).size, [courses]);
 
-  const isLoggedIn = Boolean(user);
-
-
-  // ====================================================
-  // FEATURES
-  // ====================================================
-
-  const features = [
-    {
-      icon: BookOpen,
-      title: "Quality Courses",
-      description:
-        "Learn through structured courses with lectures, notes, quizzes and practical learning resources.",
-    },
-
-    {
-      icon: Laptop,
-      title: "Learn Anywhere",
-      description:
-        "Access your learning materials from desktop, tablet or mobile whenever it is convenient for you.",
-    },
-
-    {
-      icon: BarChart3,
-      title: "Track Progress",
-      description:
-        "Monitor your course progress, completed lessons and learning achievements from your dashboard.",
-    },
+  const statItems = [
+    [BookOpen, courses.length || "—", "Available Courses"],
+    [PlayCircle, lessons || "—", "Lessons"],
+    [Target, areas || "—", "Learning Areas"],
+    [Clock3, "24/7", "Learning Access"],
   ];
-
-
-  // ====================================================
-  // LEARNING AREAS
-  // ====================================================
-
-  const learningAreas = [
-    {
-      title: "Computer Science",
-      description:
-        "Programming, web development, databases and modern computing skills.",
-      icon: Laptop,
-    },
-
-    {
-      title: "Business & Management",
-      description:
-        "Develop practical knowledge in management, communication and business.",
-      icon: BarChart3,
-    },
-
-    {
-      title: "Academic Skills",
-      description:
-        "Improve your academic knowledge with organized learning resources.",
-      icon: GraduationCap,
-    },
-  ];
-
-
-  // ====================================================
-  // HOW IT WORKS
-  // ====================================================
-
-  const steps = [
-    {
-      number: "01",
-      icon: Users,
-      title: "Create an Account",
-      description:
-        "Register with your email or continue securely with Google.",
-    },
-
-    {
-      number: "02",
-      icon: BookOpen,
-      title: "Choose a Course",
-      description:
-        "Explore available courses and select the subjects you want to learn.",
-    },
-
-    {
-      number: "03",
-      icon: PlayCircle,
-      title: "Start Learning",
-      description:
-        "Watch lessons, complete quizzes and continue improving your skills.",
-    },
-  ];
-
-
-  // ====================================================
-  // RETURN
-  // ====================================================
 
   return (
-    <main className="bg-white text-slate-900">
-
-
-      {/* ==================================================
-          HERO SECTION
-      ================================================== */}
-
-      <section className="relative overflow-hidden bg-slate-950 text-white">
-
-
-        {/* Background decoration */}
-
-        <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-blue-600/20 blur-3xl" />
-
-        <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl" />
-
-
-        <div className="relative mx-auto max-w-7xl px-6 py-20 sm:py-24 lg:px-8 lg:py-28">
-
-          <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
-
-
-            {/* ==================================================
-                HERO CONTENT
-            ================================================== */}
-
+    <main className="overflow-hidden bg-slate-50 text-slate-900">
+      <section className="relative isolate overflow-hidden bg-[#06152f] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(37,99,235,.28),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(245,194,72,.13),transparent_28%),linear-gradient(135deg,#06152f,#0a2551_55%,#071a39)]" />
+        <div className="absolute -right-32 top-10 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="absolute -left-40 bottom-0 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
+        <div className="relative mx-auto max-w-7xl px-5 pb-20 pt-14 sm:px-6 lg:px-8 lg:pt-20">
+          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-16">
             <div className="max-w-2xl">
-
-
-              {/* Badge */}
-
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 ring-1 ring-blue-500/20">
-
-                <Sparkles size={16} />
-
-                Learn Without Limits
-
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[.18em] text-blue-200 backdrop-blur"><Sparkles size={15}/> Learn • Grow • Succeed</div>
+              <h1 className="mt-7 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">Learn new skills.<span className="mt-2 block bg-gradient-to-r from-blue-300 via-blue-400 to-amber-300 bg-clip-text text-transparent">Build your future.</span></h1>
+              <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">A modern learning platform for structured courses, practical knowledge and measurable progress — available whenever you are ready to learn.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link to="/courses" className="group inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-sm font-bold shadow-xl shadow-blue-950/40 transition hover:-translate-y-0.5 hover:bg-blue-500">Explore Courses<ArrowRight size={17} className="transition-transform group-hover:translate-x-1"/></Link>
+                <Link to={isLoggedIn ? "/dashboard" : "/register"} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3.5 text-sm font-bold backdrop-blur transition hover:bg-white/10">{isLoggedIn ? "Go to Dashboard" : "Create Account"}<ArrowRight size={17}/></Link>
               </div>
-
-
-              {/* Heading */}
-
-              <h1 className="mt-7 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-
-                Learn new skills.
-
-                <span className="block text-blue-500">
-                  Build your future.
-                </span>
-
-              </h1>
-
-
-              {/* Description */}
-
-              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300 sm:text-xl">
-
-                Learn from structured courses, improve your knowledge,
-                develop practical skills and achieve your academic and
-                professional goals with Online Academy.
-
-              </p>
-
-
-              {/* ==================================================
-                  HERO BUTTONS
-              ================================================== */}
-
-              <div className="mt-9 flex flex-wrap gap-4">
-
-
-                {/* Explore Courses */}
-
-                <Link
-                  to="/courses"
-                  className="group inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                >
-
-                  Explore Courses
-
-                  <ArrowRight
-                    size={18}
-                    className="transition-transform group-hover:translate-x-1"
-                  />
-
-                </Link>
-
-
-                {/* Logged Out */}
-
-                {!isLoggedIn && (
-
-                  <Link
-                    to="/register"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-6 py-3.5 font-semibold text-white transition hover:border-slate-600 hover:bg-white/5"
-                  >
-
-                    Create Account
-
-                  </Link>
-
-                )}
-
-
-                {/* Logged In */}
-
-                {isLoggedIn && (
-
-                  <Link
-                    to="/dashboard"
-                    className="inline-flex items-center gap-2 rounded-xl border border-blue-400/40 bg-blue-500/10 px-6 py-3.5 font-semibold text-blue-300 transition hover:bg-blue-500/20"
-                  >
-
-                    Go to Dashboard
-
-                    <ArrowRight size={18} />
-
-                  </Link>
-
-                )}
-
+              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-slate-300">
+                {["Self-paced learning", "Progress tracking", "Mobile friendly"].map((x) => <span key={x} className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-300"/>{x}</span>)}
               </div>
-
-
-              {/* Trust Points */}
-
-              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-slate-400">
-
-
-                <div className="flex items-center gap-2">
-
-                  <CheckCircle
-                    size={17}
-                    className="text-blue-400"
-                  />
-
-                  Structured Learning
-
-                </div>
-
-
-                <div className="flex items-center gap-2">
-
-                  <CheckCircle
-                    size={17}
-                    className="text-blue-400"
-                  />
-
-                  Learn at Your Pace
-
-                </div>
-
-
-                <div className="flex items-center gap-2">
-
-                  <CheckCircle
-                    size={17}
-                    className="text-blue-400"
-                  />
-
-                  Progress Tracking
-
-                </div>
-
-              </div>
-
             </div>
 
-
-            {/* ==================================================
-                HERO PREVIEW
-            ================================================== */}
-
-            <div className="relative mx-auto w-full max-w-lg">
-
-
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-sm sm:p-6">
-
-
-                {/* Main Preview Card */}
-
-                <div className="rounded-2xl bg-white p-6 text-slate-900 shadow-xl">
-
-
-                  {/* Header */}
-
-                  <div className="flex items-center justify-between">
-
-
-                    <div className="flex items-center gap-3">
-
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50">
-
-                        <GraduationCap
-                          size={24}
-                          className="text-blue-600"
-                        />
-
-                      </div>
-
-
-                      <div>
-
-                        <p className="font-bold">
-                          Online Academy
-                        </p>
-
-                        <p className="text-sm text-slate-500">
-                          Student Learning
-                        </p>
-
-                      </div>
-
-                    </div>
-
-
-                    <div className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-600">
-                      Active
-                    </div>
-
+            <div className="relative mx-auto w-full max-w-xl lg:justify-self-end">
+              <div className="rounded-[2rem] border border-white/15 bg-white/[.07] p-3 shadow-2xl backdrop-blur-xl sm:p-4">
+                <div className="overflow-hidden rounded-[1.45rem] bg-white text-slate-900 shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+                    <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><GraduationCap size={24}/></div><div><p className="font-extrabold">Online Academy</p><p className="text-xs text-slate-500">Student learning portal</p></div></div>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">ACTIVE</span>
                   </div>
-
-
-                  {/* Progress */}
-
-                  <div className="mt-7">
-
-                    <div className="flex items-center justify-between">
-
-                      <p className="text-sm font-semibold text-slate-700">
-                        Learning Progress
-                      </p>
-
-                      <span className="text-sm font-bold text-blue-600">
-                        75%
-                      </span>
-
+                  <div className="p-5 sm:p-6">
+                    <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-slate-50 p-5 ring-1 ring-blue-100">
+                      <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Your learning journey</p><h2 className="mt-2 text-xl font-black sm:text-2xl">Learn at your own pace</h2><p className="mt-2 text-sm leading-6 text-slate-600">Choose a course, complete lessons and build your skills step by step.</p></div><div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-white text-amber-500 shadow-sm sm:flex"><Award size={25}/></div></div>
+                      <div className="mt-5 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-3/4 rounded-full bg-gradient-to-r from-blue-600 to-blue-400"/></div>
+                      <div className="mt-2 flex justify-between text-xs font-semibold text-slate-500"><span>Learning progress</span><span className="text-blue-700">75%</span></div>
                     </div>
-
-
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-
-                      <div className="h-full w-3/4 rounded-full bg-blue-600" />
-
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      {[[BookOpen, courses.length || "—", "Courses"],[PlayCircle, lessons || "—", "Lessons"],[Target, areas || "—", "Areas"]].map(([Icon,value,label]) => <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4"><Icon size={19} className="text-blue-700"/><p className="mt-2 text-lg font-black">{loading ? "…" : value}</p><p className="text-[11px] text-slate-500">{label}</p></div>)}
                     </div>
-
                   </div>
-
-
-                  {/* Cards */}
-
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-
-                      <BookOpen
-                        size={20}
-                        className="text-blue-600"
-                      />
-
-                      <p className="mt-2 text-xl font-bold">
-                        Courses
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        Keep learning
-                      </p>
-
-                    </div>
-
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-
-                      <Award
-                        size={20}
-                        className="text-blue-600"
-                      />
-
-                      <p className="mt-2 text-xl font-bold">
-                        Skills
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        Keep improving
-                      </p>
-
-                    </div>
-
-                  </div>
-
                 </div>
-
-
-                {/* Bottom Cards */}
-
-                <div className="mt-4 grid grid-cols-2 gap-4">
-
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-
-                    <Clock3
-                      size={25}
-                      className="text-blue-400"
-                    />
-
-                    <p className="mt-3 font-bold text-white">
-                      Flexible
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-400">
-                      Learn at your own pace
-                    </p>
-
-                  </div>
-
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-
-                    <BarChart3
-                      size={25}
-                      className="text-blue-400"
-                    />
-
-                    <p className="mt-3 font-bold text-white">
-                      Track Progress
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-400">
-                      See your learning journey
-                    </p>
-
-                  </div>
-
-                </div>
-
               </div>
-
             </div>
-
           </div>
-
         </div>
-
       </section>
 
-
-      {/* ==================================================
-          STATS
-      ================================================== */}
-
-      <section className="border-b border-slate-200 bg-white">
-
-        <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-slate-200 px-6 sm:grid-cols-4 lg:px-8">
-
-
-          <div className="px-4 py-8 text-center sm:py-10">
-
-            <p className="text-3xl font-extrabold text-slate-900">
-              100+
-            </p>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Learning Resources
-            </p>
-
-          </div>
-
-
-          <div className="px-4 py-8 text-center sm:py-10">
-
-            <p className="text-3xl font-extrabold text-slate-900">
-              5K+
-            </p>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Learners
-            </p>
-
-          </div>
-
-
-          <div className="border-t border-slate-200 px-4 py-8 text-center sm:border-t-0 sm:py-10">
-
-            <p className="text-3xl font-extrabold text-slate-900">
-              24/7
-            </p>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Learning Access
-            </p>
-
-          </div>
-
-
-          <div className="border-t border-slate-200 px-4 py-8 text-center sm:border-t-0 sm:py-10">
-
-            <p className="text-3xl font-extrabold text-slate-900">
-              100%
-            </p>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Learn at Your Pace
-            </p>
-
-          </div>
-
+      <section className="relative z-10 -mt-7 px-5 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:grid-cols-4">
+          {statItems.map(([Icon,value,label],i) => <div key={label} className={`flex items-center gap-3 px-4 py-5 sm:justify-center sm:px-6 ${i > 1 ? "border-t sm:border-t-0" : ""} ${i % 2 ? "border-l" : ""} sm:border-l ${i === 0 ? "sm:border-l-0" : ""}`}><div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 sm:flex"><Icon size={19}/></div><div><p className="text-xl font-black">{loading ? "…" : value}</p><p className="text-[11px] font-semibold text-slate-500 sm:text-xs">{label}</p></div></div>)}
         </div>
-
       </section>
 
-
-      {/* ==================================================
-          FEATURES
-      ================================================== */}
-
-      <section className="bg-slate-50 px-6 py-20 sm:py-24">
-
+      <section className="px-5 pb-6 pt-20 sm:px-6 lg:px-8 lg:pt-24">
         <div className="mx-auto max-w-7xl">
-
-
-          <div className="mx-auto max-w-2xl text-center">
-
-            <span className="text-sm font-bold tracking-wider text-blue-600">
-              WHY ONLINE ACADEMY
-            </span>
-
-
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Everything you need to learn
-            </h2>
-
-
-            <p className="mt-4 text-lg leading-7 text-slate-600">
-
-              A simple and organized learning experience designed
-              to help students learn effectively.
-
-            </p>
-
-          </div>
-
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-
-            {features.map((feature) => {
-
-              const Icon = feature.icon;
-
-              return (
-
-                <div
-                  key={feature.title}
-                  className="group rounded-2xl bg-white p-7 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
-                >
-
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
-
-                    <Icon
-                      size={25}
-                      className="text-blue-600"
-                    />
-
-                  </div>
-
-
-                  <h3 className="mt-6 text-xl font-bold text-slate-900">
-                    {feature.title}
-                  </h3>
-
-
-                  <p className="mt-3 leading-7 text-slate-600">
-                    {feature.description}
-                  </p>
-
-
-                  <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-blue-600">
-
-                    Learn more
-
-                    <ArrowRight size={16} />
-
-                  </div>
-
-                </div>
-
-              );
-
-            })}
-
-          </div>
-
+          <div className="grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-end"><div><p className="text-xs font-black uppercase tracking-[.2em] text-blue-700">Why Online Academy</p><h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Everything you need to learn, in one place.</h2></div><p className="max-w-2xl text-base leading-7 text-slate-600 lg:justify-self-end">Simple navigation, focused course content and progress tools keep your learning experience organized instead of overwhelming.</p></div>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{benefits.map(([Icon,title,text]) => <div key={title} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition group-hover:bg-blue-600 group-hover:text-white"><Icon size={21}/></div><h3 className="mt-5 font-extrabold">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></div>)}</div>
         </div>
-
       </section>
 
-
-      {/* ==================================================
-          LEARNING AREAS
-      ================================================== */}
-
-      <section className="px-6 py-20 sm:py-24">
-
+      <section className="px-5 py-20 sm:px-6 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-7xl">
-
-
-          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
-
-
-            <div className="max-w-2xl">
-
-              <span className="text-sm font-bold tracking-wider text-blue-600">
-                EXPLORE LEARNING
-              </span>
-
-
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-                Learn what matters to you
-              </h2>
-
-
-              <p className="mt-4 text-lg text-slate-600">
-
-                Explore different learning areas and build knowledge
-                that supports your academic and professional goals.
-
-              </p>
-
-            </div>
-
-
-            <Link
-              to="/courses"
-              className="inline-flex w-fit items-center gap-2 font-semibold text-blue-600 hover:text-blue-700"
-            >
-
-              View all courses
-
-              <ArrowRight size={18} />
-
-            </Link>
-
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-xs font-black uppercase tracking-[.2em] text-blue-700">Featured learning</p><h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Start with a course that fits you.</h2><p className="mt-3 text-slate-600">Browse the latest available courses and continue learning from any device.</p></div><Link to="/courses" className="inline-flex w-fit items-center gap-2 text-sm font-extrabold text-blue-700">View all courses<ArrowRight size={17}/></Link></div>
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {featured.map((course,index) => <Link key={course.id} to={course.id.startsWith("preview-") ? "/courses" : `/courses/${course.id}`} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl">
+              <div className="relative flex h-40 items-end overflow-hidden bg-gradient-to-br from-[#0b3b8f] via-blue-700 to-slate-900 p-5">{course.imageUrl ? <img src={course.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-80 transition duration-500 group-hover:scale-105"/> : <><div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-300/20 blur-2xl"/><div className="absolute bottom-0 left-1/3 h-24 w-24 rounded-full bg-amber-300/15 blur-2xl"/></>}<div className="relative flex w-full items-center justify-between"><span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur">{course.category || "Learning"}</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white"><GraduationCap size={20}/></span></div></div>
+              <div className="p-5"><div className="flex items-center justify-between gap-3"><span className="text-xs font-bold text-blue-700">{course.level || "All Levels"}</span><span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 size={13}/>{course.duration || "Self-paced"}</span></div><h3 className="mt-3 line-clamp-1 text-xl font-black">{course.title || `Course ${index + 1}`}</h3><p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{course.description || "Explore this course and begin your learning journey."}</p><div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-sm font-extrabold text-blue-700"><span>View course</span><ArrowRight size={17} className="transition-transform group-hover:translate-x-1"/></div></div>
+            </Link>)}
           </div>
-
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-
-            {learningAreas.map((area) => {
-
-              const Icon = area.icon;
-
-              return (
-
-                <div
-                  key={area.title}
-                  className="rounded-2xl border border-slate-200 bg-white p-7 transition hover:border-blue-200 hover:shadow-lg"
-                >
-
-
-                  <div className="flex items-center justify-between">
-
-
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
-
-                      <Icon
-                        size={25}
-                        className="text-blue-600"
-                      />
-
-                    </div>
-
-
-                    <ArrowRight
-                      size={20}
-                      className="text-slate-300"
-                    />
-
-                  </div>
-
-
-                  <h3 className="mt-6 text-xl font-bold text-slate-900">
-                    {area.title}
-                  </h3>
-
-
-                  <p className="mt-3 leading-7 text-slate-600">
-                    {area.description}
-                  </p>
-
-
-                  <Link
-                    to="/courses"
-                    className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
-                  >
-
-                    Explore
-
-                    <ArrowRight size={16} />
-
-                  </Link>
-
-                </div>
-
-              );
-
-            })}
-
-          </div>
-
         </div>
-
       </section>
 
-
-      {/* ==================================================
-          HOW IT WORKS
-      ================================================== */}
-
-      <section className="bg-slate-950 px-6 py-20 text-white sm:py-24">
-
-        <div className="mx-auto max-w-7xl">
-
-
-          <div className="mx-auto max-w-2xl text-center">
-
-            <span className="text-sm font-bold tracking-wider text-blue-400">
-              HOW IT WORKS
-            </span>
-
-
-            <h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">
-              Start learning in three simple steps
-            </h2>
-
-
-            <p className="mt-4 text-lg leading-7 text-slate-400">
-              Getting started with Online Academy is simple.
-            </p>
-
-          </div>
-
-
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-
-            {steps.map((step) => {
-
-              const Icon = step.icon;
-
-              return (
-
-                <div
-                  key={step.number}
-                  className="relative rounded-2xl border border-slate-800 bg-slate-900 p-7"
-                >
-
-
-                  <div className="flex items-center justify-between">
-
-
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600/10">
-
-                      <Icon
-                        size={25}
-                        className="text-blue-400"
-                      />
-
-                    </div>
-
-
-                    <span className="text-4xl font-black text-slate-800">
-                      {step.number}
-                    </span>
-
-                  </div>
-
-
-                  <h3 className="mt-7 text-xl font-bold">
-                    {step.title}
-                  </h3>
-
-
-                  <p className="mt-3 leading-7 text-slate-400">
-                    {step.description}
-                  </p>
-
-                </div>
-
-              );
-
-            })}
-
-          </div>
-
-        </div>
-
+      <section className="border-y border-slate-200 bg-white px-5 py-20 sm:px-6 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-7xl"><div className="mx-auto max-w-2xl text-center"><p className="text-xs font-black uppercase tracking-[.2em] text-blue-700">Simple process</p><h2 className="mt-3 text-3xl font-black sm:text-4xl">Your learning journey in three steps.</h2></div><div className="mt-12 grid gap-5 md:grid-cols-3">
+          [["01",Users,"Create your account","Set up your profile and access your personal learning area."],["02",BookOpen,"Choose a course","Explore available courses and select what you want to learn."],["03",PlayCircle,"Learn & track","Complete lessons, follow your progress and keep improving."]].map(([n,Icon,title,text]) => <div key={n} className="rounded-2xl border border-slate-200 bg-slate-50 p-6"><span className="text-4xl font-black text-blue-100">{n}</span><div className="mt-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-700 text-white"><Icon size={20}/></div><h3 className="mt-5 text-lg font-black">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></div>)}
+        </div></div>
       </section>
 
-
-      {/* ==================================================
-          EXTRA BENEFITS
-      ================================================== */}
-
-      <section className="bg-slate-50 px-6 py-20 sm:py-24">
-
-        <div className="mx-auto max-w-7xl">
-
-
-          <div className="mx-auto max-w-2xl text-center">
-
-            <span className="text-sm font-bold tracking-wider text-blue-600">
-              BUILT FOR STUDENTS
-            </span>
-
-
-            <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">
-              A better way to learn online
-            </h2>
-
-
-            <p className="mt-4 text-lg text-slate-600">
-
-              Everything is organized to make your learning
-              experience simple and productive.
-
-            </p>
-
-          </div>
-
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-
-
-            {/* Secure */}
-
-            <div className="rounded-2xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
-
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
-
-                <ShieldCheck
-                  size={25}
-                  className="text-blue-600"
-                />
-
-              </div>
-
-
-              <h3 className="mt-5 text-xl font-bold text-slate-900">
-                Secure Learning
-              </h3>
-
-
-              <p className="mt-3 leading-7 text-slate-600">
-
-                Your account and learning experience are protected
-                with secure authentication.
-
-              </p>
-
-            </div>
-
-
-            {/* Mobile */}
-
-            <div className="rounded-2xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
-
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
-
-                <Smartphone
-                  size={25}
-                  className="text-blue-600"
-                />
-
-              </div>
-
-
-              <h3 className="mt-5 text-xl font-bold text-slate-900">
-                Learn Anywhere
-              </h3>
-
-
-              <p className="mt-3 leading-7 text-slate-600">
-
-                Access your courses from your computer,
-                tablet or mobile device.
-
-              </p>
-
-            </div>
-
-
-            {/* Progress */}
-
-            <div className="rounded-2xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
-
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
-
-                <Target
-                  size={25}
-                  className="text-blue-600"
-                />
-
-              </div>
-
-
-              <h3 className="mt-5 text-xl font-bold text-slate-900">
-                Focus on Progress
-              </h3>
-
-
-              <p className="mt-3 leading-7 text-slate-600">
-
-                Keep track of your learning journey and continue
-                improving your skills.
-
-              </p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* ==================================================
-          FINAL CTA
-      ================================================== */}
-
-      <section className="px-6 py-20 sm:py-24">
-
-        <div className="mx-auto max-w-5xl overflow-hidden rounded-3xl bg-blue-600 px-7 py-12 text-center text-white shadow-xl sm:px-12 sm:py-16">
-
-
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-
-            <GraduationCap size={30} />
-
-          </div>
-
-
-          <h2 className="mt-6 text-3xl font-extrabold sm:text-4xl">
-
-            {isLoggedIn
-              ? "Continue your learning journey"
-              : "Ready to start learning?"}
-
-          </h2>
-
-
-          <p className="mx-auto mt-4 max-w-2xl text-lg leading-7 text-blue-100">
-
-            {isLoggedIn
-              ? "Go to your dashboard and continue learning from where you left off."
-              : "Create your free account today and begin your learning journey with Online Academy."}
-
-          </p>
-
-
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-
-
-            {/* Logged Out */}
-
-            {!isLoggedIn && (
-
-              <Link
-                to="/register"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 font-bold text-blue-600 transition hover:bg-blue-50"
-              >
-
-                Create Free Account
-
-                <ArrowRight size={18} />
-
-              </Link>
-
-            )}
-
-
-            {/* Logged In */}
-
-            {isLoggedIn && (
-
-              <Link
-                to="/dashboard"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 font-bold text-blue-600 transition hover:bg-blue-50"
-              >
-
-                Open Dashboard
-
-                <ArrowRight size={18} />
-
-              </Link>
-
-            )}
-
-
-            <Link
-              to="/courses"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-6 py-3.5 font-bold text-white transition hover:bg-white/10"
-            >
-
-              Browse Courses
-
-            </Link>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
+      <section className="px-5 py-16 sm:px-6 lg:px-8 lg:py-20"><div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] bg-[#071b3a] px-6 py-12 text-white shadow-2xl sm:px-10 lg:px-14"><div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl"/><div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-amber-400/10 blur-3xl"/><div className="relative flex flex-col items-start justify-between gap-8 md:flex-row md:items-center"><div className="max-w-2xl"><div className="flex items-center gap-2 text-sm font-bold text-amber-200"><Star size={16} fill="currentColor"/> Keep moving forward</div><h2 className="mt-3 text-3xl font-black sm:text-4xl">Ready to start learning?</h2><p className="mt-3 leading-7 text-slate-300">Explore the academy, choose your course and build your next skill with a clear learning path.</p></div><Link to={isLoggedIn ? "/dashboard" : "/courses"} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-black text-[#0b3b8f] shadow-xl transition hover:-translate-y-0.5 hover:bg-blue-50">{isLoggedIn ? "Open Dashboard" : "Explore Courses"}<ArrowRight size={17}/></Link></div></div></section>
     </main>
   );
 }
-
 
 export default Home;
