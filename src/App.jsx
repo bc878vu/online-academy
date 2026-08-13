@@ -1,1190 +1,271 @@
+import { lazy, memo, Suspense, useEffect, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import {
-  lazy,
-  memo,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-import {
-  Link,
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
-
-import {
+  BookOpen,
   GraduationCap,
+  Home as HomeIcon,
+  LayoutDashboard,
   LogOut,
   Menu,
-  X,
-  Home as HomeIcon,
-  BookOpen,
-  LayoutDashboard,
-  User,
   ShieldCheck,
+  User,
+  X,
+  FileText,
+  Award,
 } from "lucide-react";
-
-import {
-  onAuthStateChanged,
-  signOut,
-} from "firebase/auth";
-
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
+const Home = lazy(() => import("./pages/Home"));
+const Courses = lazy(() => import("./pages/Courses"));
+const CourseDetails = lazy(() => import("./pages/CourseDetails"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Profile = lazy(() => import("./pages/Profile"));
+const AdminCourses = lazy(() => import("./pages/AdminCourses"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const TermsPolicy = lazy(() => import("./pages/TermsPolicy"));
+const Certificate = lazy(() => import("./pages/Certificate"));
 
-// ======================================================
-// LAZY LOADED PAGES
-// ======================================================
-//
-// Important:
-// Pages ab initial bundle mein load nahi hongi.
-// User jis page par jayega, sirf us page ka JS load hoga.
-//
+const ADMIN_EMAIL = "admin@onlineacademy.com";
 
-const Home = lazy(
-  () => import("./pages/Home")
-);
-
-const Courses = lazy(
-  () => import("./pages/Courses")
-);
-
-const CourseDetails = lazy(
-  () => import("./pages/CourseDetails")
-);
-
-const Login = lazy(
-  () => import("./pages/Login")
-);
-
-const Register = lazy(
-  () => import("./pages/Register")
-);
-
-const ForgotPassword = lazy(
-  () => import("./pages/ForgotPassword")
-);
-
-const Dashboard = lazy(
-  () => import("./pages/Dashboard")
-);
-
-const Profile = lazy(
-  () => import("./pages/Profile")
-);
-
-const AdminCourses = lazy(
-  () => import("./pages/AdminCourses")
-);
-
-const AdminLogin = lazy(
-  () => import("./pages/AdminLogin")
-);
-
-
-// ======================================================
-// ADMIN CONFIGURATION
-// ======================================================
-
-const ADMIN_EMAIL =
-  "admin@onlineacademy.com";
-
-
-// ======================================================
-// PAGE LOADING
-// ======================================================
-
-function PageLoader({
-  text = "Loading...",
-}) {
+function PageLoader({ text = "Loading..." }) {
   return (
     <div className="flex min-h-[calc(100vh-72px)] items-center justify-center bg-slate-50 px-4">
-
       <div className="text-center">
-
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-
-          <GraduationCap
-            size={28}
-            className="text-blue-600"
-          />
-
+          <GraduationCap size={28} className="text-blue-600" />
         </div>
-
         <div className="mx-auto mt-5 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-
-        <p className="mt-4 text-sm font-semibold text-slate-600">
-          {text}
-        </p>
-
+        <p className="mt-4 text-sm font-semibold text-slate-600">{text}</p>
       </div>
-
     </div>
   );
 }
-
-
-// ======================================================
-// APP INITIAL LOADING
-// ======================================================
 
 function AppLoading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-
       <div className="text-center">
-
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/20">
-
-          <GraduationCap
-            size={32}
-            className="text-white"
-          />
-
+          <GraduationCap size={32} className="text-white" />
         </div>
-
         <div className="mx-auto mt-6 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-
-        <p className="mt-4 text-sm font-semibold text-slate-600">
-          Loading Online Academy...
-        </p>
-
+        <p className="mt-4 text-sm font-semibold text-slate-600">Loading Online Academy...</p>
       </div>
-
     </div>
   );
 }
 
+const ProtectedRoute = memo(function ProtectedRoute({ children, user }) {
+  if (user === undefined) return <PageLoader text="Checking your account..." />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+});
 
-// ======================================================
-// PROTECTED STUDENT ROUTE
-// ======================================================
+const PublicAuthRoute = memo(function PublicAuthRoute({ children, user }) {
+  if (user === undefined) return <PageLoader text="Loading..." />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return children;
+});
 
-const ProtectedRoute = memo(
-  function ProtectedRoute({
-    children,
-    user,
-  }) {
+const AdminRoute = memo(function AdminRoute({ children, user, isAdmin, adminLoading }) {
+  if (user === undefined || adminLoading) return <PageLoader text="Checking admin access..." />;
+  if (!user || !isAdmin) return <Navigate to="/admin-login" replace />;
+  return children;
+});
 
-    if (user === undefined) {
-      return (
-        <PageLoader
-          text="Checking your account..."
-        />
-      );
-    }
+const Navbar = memo(function Navbar({ user, isAdmin }) {
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-    if (!user) {
-      return (
-        <Navigate
-          to="/login"
-          replace
-        />
-      );
-    }
+  useEffect(() => setMobileOpen(false), [location.pathname]);
 
-    return children;
-  }
-);
+  const isActive = (path) =>
+    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
 
+  const desktopLink = (active) =>
+    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
+      active ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
+    }`;
 
-// ======================================================
-// PUBLIC AUTH ROUTE
-// ======================================================
-//
-// Logged-in user ko Login/Register/Forgot Password
-// pages par dobara nahi jane dena.
-//
+  const mobileLink = (active) =>
+    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+      active ? "bg-blue-50 text-blue-600" : "text-slate-700 hover:bg-slate-50 hover:text-blue-600"
+    }`;
 
-const PublicAuthRoute = memo(
-  function PublicAuthRoute({
-    children,
-    user,
-  }) {
-
-    if (user === undefined) {
-      return (
-        <PageLoader
-          text="Loading..."
-        />
-      );
-    }
-
-    if (user) {
-      return (
-        <Navigate
-          to="/dashboard"
-          replace
-        />
-      );
-    }
-
-    return children;
-  }
-);
-
-
-// ======================================================
-// ADMIN ROUTE
-// ======================================================
-
-const AdminRoute = memo(
-  function AdminRoute({
-    children,
-    user,
-    isAdmin,
-    adminLoading,
-  }) {
-
-    if (
-      user === undefined ||
-      adminLoading
-    ) {
-      return (
-        <PageLoader
-          text="Checking admin access..."
-        />
-      );
-    }
-
-    if (!user) {
-      return (
-        <Navigate
-          to="/admin-login"
-          replace
-        />
-      );
-    }
-
-    if (!isAdmin) {
-      return (
-        <Navigate
-          to="/admin-login"
-          replace
-        />
-      );
-    }
-
-    return children;
-  }
-);
-
-
-// ======================================================
-// NAVBAR
-// ======================================================
-
-const Navbar = memo(
-  function Navbar({
-    user,
-    isAdmin,
-  }) {
-
-    const location =
-      useLocation();
-
-    const [
-      mobileOpen,
-      setMobileOpen,
-    ] = useState(false);
-
-
-    // --------------------------------------------------
-    // Close mobile menu after navigation
-    // --------------------------------------------------
-
-    useEffect(() => {
+  const handleLogout = async () => {
+    try {
       setMobileOpen(false);
-    }, [
-      location.pathname,
-    ]);
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
+  return (
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <nav className="flex min-h-[72px] items-center justify-between">
+          <Link to="/" className="group flex shrink-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-md shadow-blue-500/20">
+              <GraduationCap size={25} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-[17px] font-extrabold leading-tight text-slate-900 sm:text-lg">Online Academy</h1>
+              <p className="text-[11px] font-medium text-slate-500 sm:text-xs">Learn. Grow. Succeed.</p>
+            </div>
+          </Link>
 
-    // --------------------------------------------------
-    // Active route
-    // --------------------------------------------------
+          <div className="hidden items-center gap-1 md:flex">
+            <Link to="/" className={desktopLink(isActive("/"))}><HomeIcon size={16} /> Home</Link>
+            <Link to="/courses" className={desktopLink(isActive("/courses"))}><BookOpen size={16} /> Courses</Link>
+            <Link to="/certificate" className={desktopLink(isActive("/certificate"))}><Award size={16} /> Certificate</Link>
+            <Link to="/terms" className={desktopLink(isActive("/terms"))}><FileText size={16} /> Terms & Policy</Link>
 
-    const isActive = useCallback(
-      (path) => {
-
-        if (path === "/") {
-          return (
-            location.pathname === "/"
-          );
-        }
-
-        return location.pathname.startsWith(
-          path
-        );
-      },
-      [
-        location.pathname,
-      ]
-    );
-
-
-    // --------------------------------------------------
-    // Logout
-    // --------------------------------------------------
-
-    const handleLogout =
-      useCallback(
-        async () => {
-
-          try {
-
-            setMobileOpen(false);
-
-            await signOut(auth);
-
-          } catch (error) {
-
-            console.error(
-              "Logout error:",
-              error
-            );
-
-          }
-
-        },
-        []
-      );
-
-
-    // --------------------------------------------------
-    // Classes
-    // --------------------------------------------------
-
-    const desktopLink =
-      useCallback(
-        (active) =>
-          `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
-            active
-              ? "bg-blue-50 text-blue-600"
-              : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
-          }`,
-        []
-      );
-
-
-    const mobileLink =
-      useCallback(
-        (active) =>
-          `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-            active
-              ? "bg-blue-50 text-blue-600"
-              : "text-slate-700 hover:bg-slate-50 hover:text-blue-600"
-          }`,
-        []
-      );
-
-
-    // --------------------------------------------------
-    // Render
-    // --------------------------------------------------
-
-    return (
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
-
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-          <nav className="flex min-h-[72px] items-center justify-between">
-
-
-            {/* ==========================================
-                LOGO
-            ========================================== */}
-
-            <Link
-              to="/"
-              className="group flex shrink-0 items-center gap-3"
-            >
-
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-md shadow-blue-500/20 transition-transform duration-200 group-hover:scale-105">
-
-                <GraduationCap
-                  size={25}
-                  className="text-white"
-                />
-
-              </div>
-
-              <div>
-
-                <h1 className="text-[17px] font-extrabold leading-tight text-slate-900 sm:text-lg">
-                  Online Academy
-                </h1>
-
-                <p className="text-[11px] font-medium text-slate-500 sm:text-xs">
-                  Learn. Grow. Succeed.
-                </p>
-
-              </div>
-
-            </Link>
-
-
-            {/* ==========================================
-                DESKTOP NAVIGATION
-            ========================================== */}
-
-            <div className="hidden items-center gap-1 md:flex">
-
-
-              {/* HOME */}
-
-              <Link
-                to="/"
-                className={desktopLink(
-                  isActive("/")
-                )}
-              >
-
-                <HomeIcon
-                  size={16}
-                />
-
-                Home
-
-              </Link>
-
-
-              {/* COURSES */}
-
-              <Link
-                to="/courses"
-                className={desktopLink(
-                  isActive(
-                    "/courses"
-                  )
-                )}
-              >
-
-                <BookOpen
-                  size={16}
-                />
-
-                Courses
-
-              </Link>
-
-
-              {user ? (
-                <>
-
-
-                  {/* DASHBOARD */}
-
-                  <Link
-                    to="/dashboard"
-                    className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-md transition-all ${
-                      isActive(
-                        "/dashboard"
-                      )
-                        ? "bg-blue-700 text-white"
-                        : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"
-                    }`}
-                  >
-
-                    <LayoutDashboard
-                      size={17}
-                    />
-
-                    Dashboard
-
+            {user ? (
+              <>
+                <Link to="/dashboard" className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-md transition-all ${isActive("/dashboard") ? "bg-blue-700 text-white" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+                  <LayoutDashboard size={17} /> Dashboard
+                </Link>
+                {isAdmin && (
+                  <Link to="/admin" className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${isActive("/admin") ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                    <ShieldCheck size={17} /> Admin
                   </Link>
-
-
-                  {/* ADMIN */}
-
-                  {isAdmin && (
-
-                    <Link
-                      to="/admin"
-                      className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
-                        isActive(
-                          "/admin"
-                        )
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      }`}
-                    >
-
-                      <ShieldCheck
-                        size={17}
-                      />
-
-                      Admin
-
-                    </Link>
-
-                  )}
-
-
-                  {/* PROFILE */}
-
-                  <Link
-                    to="/profile"
-                    className={desktopLink(
-                      isActive(
-                        "/profile"
-                      )
-                    )}
-                  >
-
-                    <User
-                      size={16}
-                    />
-
-                    Profile
-
-                  </Link>
-
-
-                  {/* LOGOUT */}
-
-                  <button
-                    type="button"
-                    onClick={
-                      handleLogout
-                    }
-                    className="ml-2 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100"
-                  >
-
-                    <LogOut
-                      size={17}
-                    />
-
-                    Logout
-
-                  </button>
-
-                </>
-
-              ) : (
-
-                /* LOGIN */
-
-                <Link
-                  to="/login"
-                  className="ml-2 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 hover:shadow-lg"
-                >
-
-                  Login
-
-                </Link>
-
-              )}
-
-            </div>
-
-
-            {/* ==========================================
-                MOBILE BUTTON
-            ========================================== */}
-
-            <button
-              type="button"
-              aria-label={
-                mobileOpen
-                  ? "Close menu"
-                  : "Open menu"
-              }
-              aria-expanded={
-                mobileOpen
-              }
-              onClick={() =>
-                setMobileOpen(
-                  (previous) =>
-                    !previous
-                )
-              }
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50 hover:text-blue-600 md:hidden"
-            >
-
-              {mobileOpen ? (
-                <X size={23} />
-              ) : (
-                <Menu size={23} />
-              )}
-
-            </button>
-
-          </nav>
-
-
-          {/* ==========================================
-              MOBILE MENU
-          ========================================== */}
-
-          {mobileOpen && (
-
-            <div className="border-t border-slate-100 pb-4 pt-3 md:hidden">
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
-
-
-                {/* HOME */}
-
-                <Link
-                  to="/"
-                  className={mobileLink(
-                    isActive("/")
-                  )}
-                >
-
-                  <HomeIcon
-                    size={19}
-                  />
-
-                  Home
-
-                </Link>
-
-
-                {/* COURSES */}
-
-                <Link
-                  to="/courses"
-                  className={mobileLink(
-                    isActive(
-                      "/courses"
-                    )
-                  )}
-                >
-
-                  <BookOpen
-                    size={19}
-                  />
-
-                  Courses
-
-                </Link>
-
-
-                {user ? (
-                  <>
-
-
-                    {/* DASHBOARD */}
-
-                    <Link
-                      to="/dashboard"
-                      className={mobileLink(
-                        isActive(
-                          "/dashboard"
-                        )
-                      )}
-                    >
-
-                      <LayoutDashboard
-                        size={19}
-                      />
-
-                      Dashboard
-
-                    </Link>
-
-
-                    {/* ADMIN */}
-
-                    {isAdmin && (
-
-                      <Link
-                        to="/admin"
-                        className={mobileLink(
-                          isActive(
-                            "/admin"
-                          )
-                        )}
-                      >
-
-                        <ShieldCheck
-                          size={19}
-                        />
-
-                        Admin Panel
-
-                      </Link>
-
-                    )}
-
-
-                    {/* PROFILE */}
-
-                    <Link
-                      to="/profile"
-                      className={mobileLink(
-                        isActive(
-                          "/profile"
-                        )
-                      )}
-                    >
-
-                      <User
-                        size={19}
-                      />
-
-                      My Profile
-
-                    </Link>
-
-
-                    <div className="my-2 border-t border-slate-100" />
-
-
-                    {/* LOGOUT */}
-
-                    <button
-                      type="button"
-                      onClick={
-                        handleLogout
-                      }
-                      className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                    >
-
-                      <LogOut
-                        size={19}
-                      />
-
-                      Logout
-
-                    </button>
-
-                  </>
-
-                ) : (
-
-                  <>
-
-                    <div className="my-2 border-t border-slate-100" />
-
-                    <Link
-                      to="/login"
-                      className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
-                    >
-
-                      Login
-
-                    </Link>
-
-                  </>
-
                 )}
-
-              </div>
-
-            </div>
-
-          )}
-
-        </div>
-
-      </header>
-    );
-  }
-);
-
-
-// ======================================================
-// FOOTER
-// ======================================================
-//
-// Footer mein navigation links nahi hain.
-// Is liye duplicate navbar/footer navigation nahi banegi.
-//
-
-const Footer = memo(
-  function Footer() {
-
-    const currentYear =
-      useMemo(
-        () =>
-          new Date().getFullYear(),
-        []
-      );
-
-    return (
-      <footer className="border-t border-slate-200 bg-white">
-
-        <div className="mx-auto max-w-7xl px-4 py-6 text-center sm:px-6 lg:px-8">
-
-          <div className="flex items-center justify-center gap-2">
-
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-
-              <GraduationCap
-                size={17}
-                className="text-blue-600"
-              />
-
-            </div>
-
-            <span className="text-sm font-bold text-slate-700">
-              Online Academy
-            </span>
-
+                <Link to="/profile" className={desktopLink(isActive("/profile"))}><User size={16} /> Profile</Link>
+                <button type="button" onClick={handleLogout} className="ml-2 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100">
+                  <LogOut size={17} /> Logout
+                </button>
+              </>
+            ) : (
+              <Link to="/login" className="ml-2 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-blue-700">Login</Link>
+            )}
           </div>
 
-          <p className="mt-2 text-xs text-slate-500">
-            Learn. Grow. Succeed.
-          </p>
+          <button type="button" aria-label={mobileOpen ? "Close menu" : "Open menu"} aria-expanded={mobileOpen} onClick={() => setMobileOpen((v) => !v)} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm md:hidden">
+            {mobileOpen ? <X size={23} /> : <Menu size={23} />}
+          </button>
+        </nav>
 
-          <p className="mt-3 text-xs text-slate-400">
-            © {currentYear} Online Academy. All rights reserved.
-          </p>
+        {mobileOpen && (
+          <div className="border-t border-slate-100 pb-4 pt-3 md:hidden">
+            <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+              <Link to="/" className={mobileLink(isActive("/"))}><HomeIcon size={19} /> Home</Link>
+              <Link to="/courses" className={mobileLink(isActive("/courses"))}><BookOpen size={19} /> Courses</Link>
+              <Link to="/certificate" className={mobileLink(isActive("/certificate"))}><Award size={19} /> Certificate</Link>
+              <Link to="/terms" className={mobileLink(isActive("/terms"))}><FileText size={19} /> Terms & Policy</Link>
+              {user ? (
+                <>
+                  <Link to="/dashboard" className={mobileLink(isActive("/dashboard"))}><LayoutDashboard size={19} /> Dashboard</Link>
+                  {isAdmin && <Link to="/admin" className={mobileLink(isActive("/admin"))}><ShieldCheck size={19} /> Admin Panel</Link>}
+                  <Link to="/profile" className={mobileLink(isActive("/profile"))}><User size={19} /> My Profile</Link>
+                  <div className="my-2 border-t border-slate-100" />
+                  <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50"><LogOut size={19} /> Logout</button>
+                </>
+              ) : (
+                <>
+                  <div className="my-2 border-t border-slate-100" />
+                  <Link to="/login" className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">Login</Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+});
 
+const Footer = memo(function Footer() {
+  const year = new Date().getFullYear();
+  return (
+    <footer className="border-t border-slate-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-8 md:grid-cols-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50"><GraduationCap size={19} className="text-blue-600" /></div>
+              <span className="font-extrabold text-slate-800">Online Academy</span>
+            </div>
+            <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">Learn through structured courses, track your progress, and earn certificates through Online Academy.</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Quick Links</h3>
+            <div className="mt-3 grid gap-2 text-sm">
+              <Link to="/courses" className="text-slate-500 hover:text-blue-600">Courses</Link>
+              <Link to="/dashboard" className="text-slate-500 hover:text-blue-600">Dashboard</Link>
+              <Link to="/certificate" className="text-slate-500 hover:text-blue-600">Certificate</Link>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Policies</h3>
+            <Link to="/terms" className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600"><FileText size={16} /> Terms & Policy</Link>
+          </div>
         </div>
-
-      </footer>
-    );
-  }
-);
-
-
-// ======================================================
-// MAIN APP
-// ======================================================
+        <div className="mt-8 border-t border-slate-100 pt-5 text-center text-xs text-slate-400">© {year} Online Academy. All rights reserved.</div>
+      </div>
+    </footer>
+  );
+});
 
 function App() {
-
-  const [
-    user,
-    setUser,
-  ] = useState(undefined);
-
-
-  const [
-    isAdmin,
-    setIsAdmin,
-  ] = useState(false);
-
-
-  const [
-    adminLoading,
-    setAdminLoading,
-  ] = useState(true);
-
-
-  // ====================================================
-  // SINGLE GLOBAL AUTH LISTENER
-  // ====================================================
+  const [user, setUser] = useState(undefined);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(true);
 
   useEffect(() => {
-
     let mounted = true;
-
-
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        (currentUser) => {
-
-          if (!mounted) {
-            return;
-          }
-
-
-          setUser(
-            currentUser
-          );
-
-
-          // ----------------------------------------------
-          // NOT LOGGED IN
-          // ----------------------------------------------
-
-          if (!currentUser) {
-
-            setIsAdmin(false);
-
-            setAdminLoading(false);
-
-            return;
-          }
-
-
-          // ----------------------------------------------
-          // ADMIN CHECK
-          // ----------------------------------------------
-
-          const email =
-            currentUser.email
-              ?.trim()
-              .toLowerCase();
-
-
-          const admin =
-            email ===
-            ADMIN_EMAIL.toLowerCase();
-
-
-          setIsAdmin(
-            admin
-          );
-
-          setAdminLoading(
-            false
-          );
-
-        }
-      );
-
-
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!mounted) return;
+      setUser(currentUser);
+      if (!currentUser) {
+        setIsAdmin(false);
+        setAdminLoading(false);
+        return;
+      }
+      const email = currentUser.email?.trim().toLowerCase();
+      setIsAdmin(email === ADMIN_EMAIL.toLowerCase());
+      setAdminLoading(false);
+    });
     return () => {
-
       mounted = false;
-
       unsubscribe();
-
     };
-
   }, []);
 
-
-  // ====================================================
-  // INITIAL APP LOADING
-  // ====================================================
-
-  if (user === undefined) {
-
-    return (
-      <AppLoading />
-    );
-
-  }
-
-
-  // ====================================================
-  // MAIN RENDER
-  // ====================================================
+  if (user === undefined) return <AppLoading />;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
-
-
-      {/* ==================================================
-          SINGLE NAVBAR
-      ================================================== */}
-
-      <Navbar
-        user={user}
-        isAdmin={isAdmin}
-      />
-
-
-      {/* ==================================================
-          CONTENT
-      ================================================== */}
-
+      <Navbar user={user} isAdmin={isAdmin} />
       <main className="min-w-0 flex-1">
-
-        <Suspense
-          fallback={
-            <PageLoader
-              text="Loading page..."
-            />
-          }
-        >
-
+        <Suspense fallback={<PageLoader text="Loading page..." />}>
           <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/courses" element={<Courses />} />
+            <Route path="/courses/:courseId" element={<CourseDetails />} />
+            <Route path="/certificate" element={<Certificate />} />
+            <Route path="/terms" element={<TermsPolicy />} />
 
+            <Route path="/login" element={<PublicAuthRoute user={user}><Login /></PublicAuthRoute>} />
+            <Route path="/register" element={<PublicAuthRoute user={user}><Register /></PublicAuthRoute>} />
+            <Route path="/forgot-password" element={<PublicAuthRoute user={user}><ForgotPassword /></PublicAuthRoute>} />
 
-            {/* ==========================================
-                HOME
-            ========================================== */}
+            <Route path="/admin-login" element={<AdminLogin user={user} isAdmin={isAdmin} adminLoading={adminLoading} />} />
+            <Route path="/dashboard" element={<ProtectedRoute user={user}><Dashboard /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminRoute user={user} isAdmin={isAdmin} adminLoading={adminLoading}><AdminCourses /></AdminRoute>} />
 
-            <Route
-              path="/"
-              element={
-                <Home />
-              }
-            />
-
-
-            {/* ==========================================
-                COURSES
-            ========================================== */}
-
-            <Route
-              path="/courses"
-              element={
-                <Courses />
-              }
-            />
-
-            <Route
-              path="/courses/:courseId"
-              element={
-                <CourseDetails />
-              }
-            />
-
-
-            {/* ==========================================
-                STUDENT LOGIN
-            ========================================== */}
-
-            <Route
-              path="/login"
-              element={
-                <PublicAuthRoute
-                  user={user}
-                >
-
-                  <Login />
-
-                </PublicAuthRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                REGISTER
-            ========================================== */}
-
-            <Route
-              path="/register"
-              element={
-                <PublicAuthRoute
-                  user={user}
-                >
-
-                  <Register />
-
-                </PublicAuthRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                FORGOT PASSWORD
-            ========================================== */}
-
-            <Route
-              path="/forgot-password"
-              element={
-                <PublicAuthRoute
-                  user={user}
-                >
-
-                  <ForgotPassword />
-
-                </PublicAuthRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                ADMIN LOGIN
-            ========================================== */}
-
-            <Route
-              path="/admin-login"
-              element={
-                <AdminLogin
-                  user={user}
-                  isAdmin={isAdmin}
-                  adminLoading={
-                    adminLoading
-                  }
-                />
-              }
-            />
-
-
-            {/* ==========================================
-                DASHBOARD
-            ========================================== */}
-
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute
-                  user={user}
-                >
-
-                  <Dashboard />
-
-                </ProtectedRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                PROFILE
-            ========================================== */}
-
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute
-                  user={user}
-                >
-
-                  <Profile />
-
-                </ProtectedRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                ADMIN
-            ========================================== */}
-
-            <Route
-              path="/admin"
-              element={
-                <AdminRoute
-                  user={user}
-                  isAdmin={isAdmin}
-                  adminLoading={
-                    adminLoading
-                  }
-                >
-
-                  <AdminCourses />
-
-                </AdminRoute>
-              }
-            />
-
-
-            {/* ==========================================
-                404 FALLBACK
-            ========================================== */}
-
-            <Route
-              path="*"
-              element={
-                <Navigate
-                  to="/"
-                  replace
-                />
-              }
-            />
-
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-
         </Suspense>
-
       </main>
-
-
-      {/* ==================================================
-          SINGLE FOOTER
-      ================================================== */}
-
       <Footer />
-
     </div>
   );
 }
-
 
 export default App;
