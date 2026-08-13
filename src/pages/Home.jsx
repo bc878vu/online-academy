@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getCountFromServer, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import {
-  ArrowLeft, ArrowRight, Award, BarChart3, BookOpen, CheckCircle2,
-  ChevronRight, Clock3, GraduationCap, Laptop, PlayCircle, Search,
-  ShieldCheck, Sparkles, Star, Target, Users, X,
+  ArrowLeft, ArrowRight, Award, BarChart3, BookOpen, ChevronRight,
+  Clock3, GraduationCap, Laptop, PlayCircle, Search, ShieldCheck,
+  Sparkles, Target, Users,
 } from "lucide-react";
 import { auth, db } from "../firebase";
 import "./home-animations.css";
@@ -28,11 +28,9 @@ const STEPS = [
   ["03", PlayCircle, "Start Learning", "Complete lessons, follow your progress and keep improving your skills."],
 ];
 
-const BENEFITS = [
-  [ShieldCheck, "Secure Learning", "Your account and learning experience are protected with secure authentication."],
-  [Clock3, "Learn Anytime", "Study whenever it suits you with 24/7 access to your learning platform."],
-  [Target, "Focused Progress", "Stay organized and keep your attention on the skills you want to build."],
-];
+const CACHE_KEY = "online_academy_home_courses_v2";
+const CACHE_TTL = 2 * 60 * 1000;
+const FEATURED_LIMIT = 6;
 
 function getTimestampValue(value) {
   if (!value) return 0;
@@ -62,10 +60,33 @@ function getCourseCategory(course) { return toSafeText(course?.category, "Online
 function getCourseDescription(course) { return toSafeText(course?.description, "Start learning with this structured online course."); }
 function getCourseLevel(course) { return toSafeText(course?.level, "Start Learning"); }
 
+function readCachedCourses() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.timestamp || !Array.isArray(parsed.courses)) return null;
+    if (Date.now() - parsed.timestamp > CACHE_TTL) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedCourses(courses, totalCount) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), courses, totalCount }));
+  } catch {
+    // Cache is optional.
+  }
+}
+
 function Home() {
   const [user, setUser] = useState(null);
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = useMemo(() => readCachedCourses(), []);
+  const [courses, setCourses] = useState(cached?.courses || []);
+  const [totalCourses, setTotalCourses] = useState(cached?.totalCount ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
   const [slide, setSlide] = useState(0);
   const [search, setSearch] = useState("");
@@ -75,35 +96,71 @@ function Home() {
 
   useEffect(() => {
     let mounted = true;
+
     const loadCourses = async () => {
-      setLoading(true);
       setError("");
       try {
-        const q = query(collection(db, "courses"), where("published", "==", true));
-        const snap = await getDocs(q);
+        // Only the featured six courses are loaded on the landing page.
+        // The full catalogue remains on /courses, which keeps this page scalable.
+        const featuredQuery = query(
+          collection(db, "courses"),
+          where("published", "==", true),
+          orderBy("createdAt", "desc"),
+          limit(FEATURED_LIMIT)
+        );
+        const countQuery = query(collection(db, "courses"), where("published", "==", true));
+
+        const [featuredSnap, countSnap] = await Promise.all([
+          getDocs(featuredQuery),
+          getCountFromServer(countQuery),
+        ]);
+
         if (!mounted) return;
-        const list = snap.docs
+
+        const list = featuredSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .filter((course) => course.published === true)
           .sort((a, b) => getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt));
+
+        const count = Number(countSnap.data().count) || list.length;
         setCourses(list);
+        setTotalCourses(count);
+        setLoading(false);
+        saveCachedCourses(list, count);
       } catch (e) {
         console.error("Home courses:", e);
-        if (mounted) setError(e?.code === "permission-denied" ? "Firebase permission denied. Please check your Firestore security rules." : "Unable to load courses right now. Please try again.");
-      } finally {
-        if (mounted) setLoading(false);
+        if (!mounted) return;
+        // If a legacy course set has missing createdAt values, retry without ordering.
+        if (e?.code === "failed-precondition" || e?.code === "invalid-argument") {
+          try {
+            const fallbackQuery = query(collection(db, "courses"), where("published", "==", true), limit(FEATURED_LIMIT));
+            const fallbackSnap = await getDocs(fallbackQuery);
+            if (!mounted) return;
+            const list = fallbackSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((course) => course.published === true);
+            setCourses(list);
+            setTotalCourses((previous) => previous ?? list.length);
+            saveCachedCourses(list, totalCourses ?? list.length);
+            setLoading(false);
+            return;
+          } catch (fallbackError) {
+            console.error("Home fallback courses:", fallbackError);
+          }
+        }
+        setError(e?.code === "permission-denied" ? "Firebase permission denied. Please check your Firestore security rules." : "Unable to load courses right now. Please try again.");
+        setLoading(false);
       }
     };
+
     loadCourses();
     return () => { mounted = false; };
-  }, []);
+  }, [totalCourses]);
 
   const categories = useMemo(() => [...new Set(courses.map(getCourseCategory).filter(Boolean))], [courses]);
 
   const results = useMemo(() => {
     const s = search.trim().toLowerCase();
-    if (!s) return courses.slice(0, 6);
-    return courses.filter((c) => [getCourseTitle(c), getCourseCategory(c), getCourseDescription(c), toSafeText(c.instructor), getCourseLevel(c)].some((v) => v.toLowerCase().includes(s))).slice(0, 6);
+    if (!s) return courses;
+    return courses.filter((c) => [getCourseTitle(c), getCourseCategory(c), getCourseDescription(c), toSafeText(c.instructor), getCourseLevel(c)].some((v) => v.toLowerCase().includes(s)));
   }, [courses, search]);
 
   const slides = useMemo(() => {
@@ -128,8 +185,8 @@ function Home() {
 
   const active = slides[slide] || DEFAULT_SLIDES[0];
   const stats = [
-    [BookOpen, loading ? "—" : courses.length, "Published Courses"],
-    [Users, categories.length || "—", "Learning Areas"],
+    [BookOpen, loading ? "—" : totalCourses ?? courses.length, "Published Courses"],
+    [Users, categories.length || "—", "Featured Areas"],
     [PlayCircle, "24/7", "Learning Access"],
     [Award, "100%", "Learn at Your Pace"],
   ];
@@ -137,8 +194,8 @@ function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-white text-slate-900">
       <section className="oa-hero relative overflow-hidden bg-[#061633] text-white">
-        <div className="oa-grid pointer-events-none absolute inset-0" />
-        <div className="oa-orb oa-orb-one" /><div className="oa-orb oa-orb-two" />
+        <div className="oa-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+        <div className="oa-orb oa-orb-one" aria-hidden="true" /><div className="oa-orb oa-orb-two" aria-hidden="true" />
         <div className="relative mx-auto max-w-7xl px-5 pb-16 pt-14 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24 lg:pt-24">
           <div className="grid items-center gap-12 lg:grid-cols-[1.02fr_.98fr] lg:gap-16">
             <div className="oa-fade-up max-w-2xl">
@@ -174,17 +231,17 @@ function Home() {
 
       <section className="bg-slate-50 px-5 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl relative">
-          <div className="relative"><div className="flex rounded-2xl bg-white p-1.5 shadow-lg ring-1 ring-slate-200"><Search size={20} className="m-3 text-slate-400"/><input value={search} onFocus={() => setSearchOpen(true)} onChange={(e) => {setSearch(e.target.value);setSearchOpen(true);}} placeholder="Search for courses, skills or topics..." className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none"/><button className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">Search</button></div>{searchOpen && search.trim() && <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl bg-white p-2 text-slate-900 shadow-2xl">{results.length ? results.slice(0,4).map((c)=><Link key={c.id} to={user ? `/courses/${c.id}` : "/login"} onClick={() => setSearchOpen(false)} className="flex items-center gap-3 rounded-xl p-3 hover:bg-blue-50"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-50">{getCourseImage(c) ? <img src={getCourseImage(c)} alt="" className="h-full w-full object-cover"/> : <BookOpen size={18} className="text-blue-600"/>}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{getCourseTitle(c)}</p><p className="truncate text-xs text-slate-500">{getCourseCategory(c)}</p></div><ChevronRight size={17} className="ml-auto text-slate-400"/></Link>) : <p className="p-5 text-center text-sm text-slate-500">No matching courses found.</p>}</div>}</div>
+          <div className="relative"><div className="flex rounded-2xl bg-white p-1.5 shadow-lg ring-1 ring-slate-200"><Search size={20} className="m-3 text-slate-400"/><input value={search} onFocus={() => setSearchOpen(true)} onChange={(e) => {setSearch(e.target.value);setSearchOpen(true);}} placeholder="Search for courses, skills or topics..." className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none"/><button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">Search</button></div>{searchOpen && search.trim() && <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl bg-white p-2 text-slate-900 shadow-2xl">{results.length ? results.slice(0,4).map((c)=><Link key={c.id} to={user ? `/courses/${c.id}` : "/login"} onClick={() => setSearchOpen(false)} className="flex items-center gap-3 rounded-xl p-3 hover:bg-blue-50"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-50">{getCourseImage(c) ? <img src={getCourseImage(c)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover"/> : <BookOpen size={18} className="text-blue-600"/>}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{getCourseTitle(c)}</p><p className="truncate text-xs text-slate-500">{getCourseCategory(c)}</p></div><ChevronRight size={17} className="ml-auto text-slate-400"/></Link>) : <p className="p-5 text-center text-sm text-slate-500">No matching courses found.</p>}</div>}</div>
         </div>
       </section>
 
-      <section id="courses" className="scroll-mt-20 bg-slate-50 px-5 py-16 sm:px-6 sm:py-20 lg:px-8"><div className="mx-auto max-w-7xl"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">AVAILABLE COURSES</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Start learning today</h2><p className="mt-3 text-slate-600">Explore the latest published courses from Online Academy.</p></div><Link to="/courses" className="inline-flex items-center gap-2 font-bold text-blue-600">View all courses<ArrowRight size={18}/></Link></div>{loading ? <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">{[1,2,3].map((x)=><div key={x} className="oa-skeleton h-80 rounded-3xl"/>)}</div> : error ? <div className="mt-10 rounded-3xl border border-red-100 bg-white px-6 py-16 text-center"><AlertCircle size={30} className="mx-auto text-red-500"/><h3 className="mt-4 text-xl font-black">Courses could not be loaded</h3><p className="mt-2 text-sm text-slate-500">{error}</p><Link to="/courses" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white">Open Courses Page<ArrowRight size={16}/></Link></div> : courses.length ? <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">{courses.slice(0,6).map((c)=><Link key={c.id} to={user ? `/courses/${c.id}` : "/login"} className="oa-course-card group overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200"><div className="relative h-48 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-800">{getCourseImage(c) ? <img src={getCourseImage(c)} alt={getCourseTitle(c)} className="h-full w-full object-cover transition duration-700 group-hover:scale-110"/> : <div className="flex h-full items-center justify-center"><BookOpen size={58} className="text-white/90"/></div>}<div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent"/>{getCourseCategory(c) && <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700">{getCourseCategory(c)}</span>}</div><div className="p-6"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><PlayCircle size={15} className="text-blue-600"/>Published course</div><h3 className="mt-3 line-clamp-2 text-xl font-black">{getCourseTitle(c)}</h3><p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500">{getCourseDescription(c)}</p><div className="mt-5 flex items-center justify-between"><span className="text-sm font-bold text-blue-600">{user ? "View course" : "Login to view"}</span><span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"><ArrowRight size={16}/></span></div></div></Link>)}</div> : <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><BookOpen size={30} className="mx-auto text-slate-400"/><h3 className="mt-4 text-xl font-black">No published courses yet</h3><p className="mt-2 text-slate-500">Published courses will appear here automatically when they are added.</p></div>}</div></section>
+      <section id="courses" className="scroll-mt-20 bg-slate-50 px-5 py-16 sm:px-6 sm:py-20 lg:px-8"><div className="mx-auto max-w-7xl"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">AVAILABLE COURSES</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Start learning today</h2><p className="mt-3 text-slate-600">Explore the latest published courses from Online Academy.</p></div><Link to="/courses" className="inline-flex items-center gap-2 font-bold text-blue-600">View all courses<ArrowRight size={18}/></Link></div>{loading ? <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">{[1,2,3].map((x)=><div key={x} className="oa-skeleton h-80 rounded-3xl"/>)}</div> : error ? <div className="mt-10 rounded-3xl border border-red-100 bg-white px-6 py-16 text-center"><ShieldCheck size={30} className="mx-auto text-red-500"/><h3 className="mt-4 text-xl font-black">Courses could not be loaded</h3><p className="mt-2 text-sm text-slate-500">{error}</p><Link to="/courses" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white">Open Courses Page<ArrowRight size={16}/></Link></div> : courses.length ? <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">{courses.map((c)=><Link key={c.id} to={user ? `/courses/${c.id}` : "/login"} className="oa-course-card group overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200"><div className="relative h-48 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-800">{getCourseImage(c) ? <img src={getCourseImage(c)} alt={getCourseTitle(c)} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-110"/> : <div className="flex h-full items-center justify-center"><BookOpen size={58} className="text-white/90"/></div>}<div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent"/>{getCourseCategory(c) && <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700">{getCourseCategory(c)}</span>}</div><div className="p-6"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><PlayCircle size={15} className="text-blue-600"/>Published course</div><h3 className="mt-3 line-clamp-2 text-xl font-black">{getCourseTitle(c)}</h3><p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500">{getCourseDescription(c)}</p><div className="mt-5 flex items-center justify-between"><span className="text-sm font-bold text-blue-600">{user ? "View course" : "Login to view"}</span><span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"><ArrowRight size={16}/></span></div></div></Link>)}</div> : <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><BookOpen size={30} className="mx-auto text-slate-400"/><h3 className="mt-4 text-xl font-black">No published courses yet</h3><p className="mt-2 text-slate-500">Published courses will appear here automatically when they are added.</p></div>}</div></section>
 
       <section className="px-5 py-20 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="text-center"><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">WHY ONLINE ACADEMY</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Everything you need to learn</h2><p className="mx-auto mt-4 max-w-2xl text-slate-500">A simple and organized learning experience designed to help students learn effectively.</p></div><div className="mt-10 grid gap-5 md:grid-cols-3">{FEATURES.map(([Icon,title,description])=><div key={title} className="oa-feature-card rounded-3xl border border-slate-200 bg-white p-7 shadow-sm"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Icon size={24}/></div><h3 className="mt-6 text-xl font-black">{title}</h3><p className="mt-3 leading-7 text-slate-500">{description}</p></div>)}</div></div></section>
 
       <section className="bg-slate-50 px-5 py-20 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="text-center"><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">HOW IT WORKS</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Start learning in three steps</h2></div><div className="mt-10 grid gap-5 md:grid-cols-3">{STEPS.map(([number,Icon,title,description])=><div key={number} className="relative rounded-3xl bg-white p-7 shadow-sm ring-1 ring-slate-200"><span className="text-sm font-black text-blue-600">{number}</span><div className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Icon size={24}/></div><h3 className="mt-6 text-xl font-black">{title}</h3><p className="mt-3 leading-7 text-slate-500">{description}</p></div>)}</div></div></section>
 
-      <section className="px-5 py-20 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="text-center"><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">BROWSE TOP CATEGORIES</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Explore by category</h2><p className="mt-3 text-slate-500">Categories are generated automatically from your published courses.</p></div>{categories.length ? <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{categories.slice(0,6).map((cat,i)=>{const icons=[Laptop,BarChart3,GraduationCap,BookOpen,Target,Award];const Icon=icons[i%icons.length];return <Link key={cat} to="/courses" className="oa-category-card group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Icon size={23}/></div><ChevronRight size={19} className="text-slate-300 group-hover:translate-x-1 group-hover:text-blue-600"/></div><h3 className="mt-6 text-lg font-black">{cat}</h3><p className="mt-2 text-sm leading-6 text-slate-500">Explore published courses in this learning area.</p></Link>})}</div> : <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center"><GraduationCap size={34} className="mx-auto text-slate-400"/><h3 className="mt-4 text-lg font-black">Categories will appear here soon</h3><p className="mt-2 text-slate-500">Publish courses to populate this section automatically.</p></div>}</div></section>
+      <section className="px-5 py-20 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="text-center"><p className="text-xs font-black tracking-[.2em] text-blue-600 sm:text-sm">BROWSE TOP CATEGORIES</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">Explore by category</h2><p className="mt-3 text-slate-500">Categories are generated automatically from featured published courses.</p></div>{categories.length ? <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{categories.slice(0,6).map((cat,i)=>{const icons=[Laptop,BarChart3,GraduationCap,BookOpen,Target,Award];const Icon=icons[i%icons.length];return <Link key={cat} to="/courses" className="oa-category-card group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Icon size={23}/></div><ChevronRight size={19} className="text-slate-300 group-hover:translate-x-1 group-hover:text-blue-600"/></div><h3 className="mt-6 text-lg font-black">{cat}</h3><p className="mt-2 text-sm leading-6 text-slate-500">Explore published courses in this learning area.</p></Link>})}</div> : <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center"><GraduationCap size={34} className="mx-auto text-slate-400"/><h3 className="mt-4 text-lg font-black">Categories will appear here soon</h3><p className="mt-2 text-slate-500">Publish courses to populate this section automatically.</p></div>}</div></section>
 
       <section className="px-5 pb-20 sm:px-6 lg:px-8"><div className="oa-cta relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] px-7 py-12 text-white shadow-2xl sm:px-12 sm:py-16"><div className="relative text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15"><GraduationCap size={29}/></div><h2 className="mt-6 text-3xl font-black sm:text-4xl">{user ? "Continue your learning journey" : "Ready to start your learning journey?"}</h2><p className="mx-auto mt-4 max-w-2xl text-lg leading-7 text-blue-100">{user ? "Open your dashboard and continue learning from where you left off." : "Explore the academy, choose a course and keep building the skills that matter to you."}</p><div className="mt-8 flex flex-wrap justify-center gap-3"><Link to={user ? "/dashboard" : "/register"} className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 font-black text-blue-700 hover:bg-blue-50">{user ? "Open Dashboard" : "Create Free Account"}<ArrowRight size={18}/></Link><Link to="/courses" className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-6 py-3.5 font-black text-white hover:bg-white/10">Browse Courses</Link></div></div></div></section>
 
