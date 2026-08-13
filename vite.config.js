@@ -115,7 +115,9 @@ const lectureProgressGuard = () => ({
 
     return { code: next, map: null }
   },
+})
 
+export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
