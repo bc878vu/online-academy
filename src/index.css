@@ -4,59 +4,31 @@
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
 
-/* Online Academy brand logo: use the real site mark everywhere. */
-header a[href="/"] > div:first-child {
-  position: relative;
-  overflow: hidden;
-  background: #fff url("/favicon.svg") center / cover no-repeat !important;
-  border-radius: 14px !important;
-  box-shadow: 0 8px 22px rgba(37, 99, 235, .18) !important;
-  border: 1px solid rgba(148, 163, 184, .25);
-}
+header a[href="/"] > div:first-child { position: relative; overflow: hidden; background: #fff url("/favicon.svg") center / cover no-repeat !important; border-radius: 14px !important; box-shadow: 0 8px 22px rgba(37, 99, 235, .18) !important; border: 1px solid rgba(148, 163, 184, .25); }
 header a[href="/"] > div:first-child > * { display: none !important; }
-
-footer .flex.items-center.gap-2 > div:first-child {
-  position: relative;
-  overflow: hidden;
-  background: #fff url("/favicon.svg") center / cover no-repeat !important;
-  border-radius: 12px !important;
-}
+footer .flex.items-center.gap-2 > div:first-child { position: relative; overflow: hidden; background: #fff url("/favicon.svg") center / cover no-repeat !important; border-radius: 12px !important; }
 footer .flex.items-center.gap-2 > div:first-child > * { display: none !important; }
+header { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+header nav a, header nav button { -webkit-tap-highlight-color: transparent; }
+header nav a:focus-visible, header nav button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 
-/* Navbar polish without changing the shared global navbar structure. */
-header {
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
-}
-header nav a, header nav button {
-  -webkit-tap-highlight-color: transparent;
-}
-header nav a:focus-visible, header nav button:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
-/* The navbar is global in App.jsx, including Dashboard. */
+/* Shared global navbar: Dashboard uses this exact same navbar. */
 @media (min-width: 1024px) {
   header nav > div.hidden { display: flex !important; }
-  header nav > button[aria-label*="navigation menu"] { display: none !important; }
+  header nav > div.hidden > div:first-child > a:nth-of-type(4),
+  header nav > div.hidden > div:first-child > a:nth-of-type(5) { display: none !important; }
+  header nav > button[aria-label*="navigation menu"] { display: flex !important; }
+  header + div.fixed.inset-0 { display: block !important; }
+  header + div.fixed.inset-0 > div { top: 84px !important; left: auto !important; right: 28px !important; width: 360px !important; max-height: calc(100vh - 105px) !important; }
 }
-
 @media (max-width: 1023px) {
   header nav > div.hidden { display: none !important; }
   header nav > button[aria-label*="navigation menu"] { display: flex !important; }
 }
-
 @media (max-width: 639px) {
   header nav { min-height: 66px !important; }
-  header nav > a[href="/"] > div:first-child {
-    width: 42px !important;
-    height: 42px !important;
-    border-radius: 13px !important;
-  }
-  header nav > a[href="/"] > div:nth-child(2) > div:first-child {
-    font-size: 15px !important;
-  }
+  header nav > a[href="/"] > div:first-child { width: 42px !important; height: 42px !important; border-radius: 13px !important; }
+  header nav > a[href="/"] > div:nth-child(2) > div:first-child { font-size: 15px !important; }
 }
 
 .certificate-sheet { position: relative; }
