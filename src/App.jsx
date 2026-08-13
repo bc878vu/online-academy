@@ -19,6 +19,7 @@ import {
   X,
   FileText,
   Award,
+  ChevronRight,
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
@@ -108,20 +109,6 @@ const Navbar = memo(function Navbar({ user, isAdmin }) {
   const isActive = (path) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
 
-  const desktopLink = (active) =>
-    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
-      active
-        ? "bg-blue-50 text-blue-600"
-        : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
-    }`;
-
-  const mobileLink = (active) =>
-    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-      active
-        ? "bg-blue-50 text-blue-600"
-        : "text-slate-700 hover:bg-slate-50 hover:text-blue-600"
-    }`;
-
   const handleLogout = async () => {
     try {
       setMobileOpen(false);
@@ -131,88 +118,212 @@ const Navbar = memo(function Navbar({ user, isAdmin }) {
     }
   };
 
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "Student";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "S";
+
+  const navItems = [
+    { to: "/", label: "Home", icon: HomeIcon },
+    { to: "/courses", label: "Courses", icon: BookOpen },
+    { to: "/certificate", label: "Certificate", icon: Award },
+    { to: "/verify-certificate", label: "Verify", icon: ShieldCheck },
+    { to: "/terms", label: "Terms", icon: FileText },
+  ];
+
+  const desktopItem = (active) =>
+    `group relative inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all duration-200 ${
+      active
+        ? "bg-blue-50 text-blue-700 shadow-sm"
+        : "text-slate-600 hover:bg-slate-50 hover:text-blue-700"
+    }`;
+
+  const mobileItem = (active) =>
+    `flex min-h-[50px] items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-bold transition-all ${
+      active
+        ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100"
+        : "text-slate-700 hover:bg-slate-50"
+    }`;
+
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <nav className="flex min-h-[72px] items-center justify-between">
-          <Link to="/" className="group flex shrink-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-md shadow-blue-500/20">
-              <GraduationCap size={25} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-[17px] font-extrabold leading-tight text-slate-900 sm:text-lg">Online Academy</h1>
-              <p className="text-[11px] font-medium text-slate-500 sm:text-xs">Learn. Grow. Succeed.</p>
-            </div>
-          </Link>
+    <>
+      <header className="sticky top-0 z-[100] border-b border-slate-200/80 bg-white/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-2xl">
+        <div className="mx-auto max-w-[1440px] px-3 sm:px-5 lg:px-7 xl:px-8">
+          <nav className="flex min-h-[70px] items-center justify-between gap-3 lg:min-h-[76px]">
+            <Link
+              to="/"
+              aria-label="Online Academy home"
+              className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3"
+            >
+              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[15px] bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 shadow-lg shadow-blue-600/25 ring-1 ring-blue-500/20 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl group-hover:shadow-blue-600/30 sm:h-12 sm:w-12">
+                <div className="absolute -right-3 -top-3 h-8 w-8 rounded-full bg-white/20 blur-sm" />
+                <span className="relative text-[13px] font-black tracking-tight text-white sm:text-sm">OA</span>
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[16px] font-black leading-tight tracking-[-0.02em] text-slate-900 sm:text-[18px]">Online Academy</div>
+                <div className="mt-0.5 truncate text-[10px] font-semibold tracking-wide text-slate-400 sm:text-[11px]">Learn. Grow. Succeed.</div>
+              </div>
+            </Link>
 
-          <div className="hidden items-center gap-1 md:flex">
-            <Link to="/" className={desktopLink(isActive("/"))}><HomeIcon size={16} /> Home</Link>
-            <Link to="/courses" className={desktopLink(isActive("/courses"))}><BookOpen size={16} /> Courses</Link>
-            <Link to="/certificate" className={desktopLink(isActive("/certificate"))}><Award size={16} /> Certificate</Link>
-            <Link to="/verify-certificate" className={desktopLink(isActive("/verify-certificate"))}><ShieldCheck size={16} /> Verify</Link>
-            <Link to="/terms" className={desktopLink(isActive("/terms"))}><FileText size={16} /> Terms & Policy</Link>
-
-            {user ? (
-              <>
-                <Link to="/dashboard" className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-md transition-all ${isActive("/dashboard") ? "bg-blue-700 text-white" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
-                  <LayoutDashboard size={17} /> Dashboard
-                </Link>
-                {isAdmin && (
-                  <>
-                    <Link to="/admin" className={`ml-1 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${isActive("/admin") ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-                      <ShieldCheck size={17} /> Admin
-                    </Link>
-                    <Link to="/admin/assessments" className={desktopLink(isActive("/admin/assessments"))}><FileText size={16} /> Assessments</Link>
-                  </>
-                )}
-                <Link to="/profile" className={desktopLink(isActive("/profile"))}><User size={16} /> Profile</Link>
-                <button type="button" onClick={handleLogout} className="ml-2 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100">
-                  <LogOut size={17} /> Logout
-                </button>
-              </>
-            ) : (
-              <Link to="/login" className="ml-2 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-blue-700">Login</Link>
-            )}
-          </div>
-
-          <button type="button" aria-label={mobileOpen ? "Close menu" : "Open menu"} aria-expanded={mobileOpen} onClick={() => setMobileOpen((v) => !v)} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm md:hidden">
-            {mobileOpen ? <X size={23} /> : <Menu size={23} />}
-          </button>
-        </nav>
-
-        {mobileOpen && (
-          <div className="border-t border-slate-100 pb-4 pt-3 md:hidden">
-            <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
-              <Link to="/" className={mobileLink(isActive("/"))}><HomeIcon size={19} /> Home</Link>
-              <Link to="/courses" className={mobileLink(isActive("/courses"))}><BookOpen size={19} /> Courses</Link>
-              <Link to="/certificate" className={mobileLink(isActive("/certificate"))}><Award size={19} /> Certificate</Link>
-              <Link to="/verify-certificate" className={mobileLink(isActive("/verify-certificate"))}><ShieldCheck size={19} /> Verify Certificate</Link>
-              <Link to="/terms" className={mobileLink(isActive("/terms"))}><FileText size={19} /> Terms & Policy</Link>
+            <div className="hidden items-center gap-1 xl:flex">
+              <div className="flex items-center rounded-2xl border border-slate-200/80 bg-slate-50/70 p-1">
+                {navItems.map(({ to, label, icon: Icon }) => (
+                  <Link key={to} to={to} className={desktopItem(isActive(to))}>
+                    <Icon size={15} strokeWidth={2.2} />
+                    <span>{label}</span>
+                    {to === "/" && isActive(to) ? <span className="absolute bottom-1 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-blue-600" /> : null}
+                  </Link>
+                ))}
+              </div>
 
               {user ? (
+                <div className="ml-2 flex items-center gap-1.5">
+                  <Link
+                    to="/dashboard"
+                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-extrabold transition-all ${
+                      isActive("/dashboard")
+                        ? "bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+                        : "bg-blue-600 text-white shadow-md shadow-blue-600/20 hover:-translate-y-0.5 hover:bg-blue-700"
+                    }`}
+                  >
+                    <LayoutDashboard size={16} /> Dashboard
+                  </Link>
+                  <Link
+                    to="/profile"
+                    title="My Profile"
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl border text-xs font-black transition-all ${
+                      isActive("/profile")
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    }`}
+                  >
+                    {initials}
+                  </Link>
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      title="Admin Panel"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                    >
+                      <ShieldCheck size={17} />
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    title="Logout"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100"
+                  >
+                    <LogOut size={17} />
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="ml-2 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-extrabold text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
+                >
+                  Login <ChevronRight size={16} />
+                </Link>
+              )}
+            </div>
+
+            <button
+              type="button"
+              aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen((value) => !value)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 xl:hidden"
+            >
+              {mobileOpen ? <X size={24} strokeWidth={2.2} /> : <Menu size={24} strokeWidth={2.2} />}
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[90] bg-slate-950/25 backdrop-blur-[2px] xl:hidden" onClick={() => setMobileOpen(false)}>
+          <div
+            className="absolute left-3 right-3 top-[82px] max-h-[calc(100vh-96px)] overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-3 shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:left-5 sm:right-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {user && (
+              <div className="mb-2 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 p-3 ring-1 ring-blue-100">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-sm font-black text-white shadow-md shadow-blue-600/20">
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-extrabold text-slate-900">{displayName}</p>
+                  <p className="truncate text-xs text-slate-500">{user.email || "Online Academy Student"}</p>
+                </div>
+                <Link
+                  to="/profile"
+                  className="rounded-lg bg-white px-2.5 py-2 text-xs font-bold text-blue-700 shadow-sm ring-1 ring-blue-100"
+                >
+                  Profile
+                </Link>
+              </div>
+            )}
+
+            <div className="grid gap-1">
+              {navItems.map(({ to, label, icon: Icon }) => (
+                <Link key={to} to={to} className={mobileItem(isActive(to))}>
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isActive(to) ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}>
+                    <Icon size={19} />
+                  </span>
+                  <span className="flex-1">{label === "Verify" ? "Verify Certificate" : label}</span>
+                  <ChevronRight size={17} className="text-slate-300" />
+                </Link>
+              ))}
+
+              {user && (
                 <>
-                  <Link to="/dashboard" className={mobileLink(isActive("/dashboard"))}><LayoutDashboard size={19} /> Dashboard</Link>
+                  <Link to="/dashboard" className={mobileItem(isActive("/dashboard"))}>
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${isActive("/dashboard") ? "bg-white text-blue-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}><LayoutDashboard size={19} /></span>
+                    <span className="flex-1">Dashboard</span>
+                    <ChevronRight size={17} className="text-slate-300" />
+                  </Link>
                   {isAdmin && (
                     <>
-                      <Link to="/admin" className={mobileLink(isActive("/admin"))}><ShieldCheck size={19} /> Admin Panel</Link>
-                      <Link to="/admin/assessments" className={mobileLink(isActive("/admin/assessments"))}><FileText size={19} /> Assessments</Link>
+                      <Link to="/admin" className={mobileItem(isActive("/admin"))}>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500"><ShieldCheck size={19} /></span>
+                        <span className="flex-1">Admin Panel</span>
+                        <ChevronRight size={17} className="text-slate-300" />
+                      </Link>
+                      <Link to="/admin/assessments" className={mobileItem(isActive("/admin/assessments"))}>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500"><FileText size={19} /></span>
+                        <span className="flex-1">Assessments</span>
+                        <ChevronRight size={17} className="text-slate-300" />
+                      </Link>
                     </>
                   )}
-                  <Link to="/profile" className={mobileLink(isActive("/profile"))}><User size={19} /> My Profile</Link>
                   <div className="my-2 border-t border-slate-100" />
-                  <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50"><LogOut size={19} /> Logout</button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex min-h-[50px] w-full items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-bold text-red-600 transition hover:bg-red-50"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50"><LogOut size={19} /></span>
+                    Logout
+                  </button>
                 </>
-              ) : (
+              )}
+
+              {!user && (
                 <>
                   <div className="my-2 border-t border-slate-100" />
-                  <Link to="/login" className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">Login</Link>
+                  <Link to="/login" className="flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-[15px] font-extrabold text-white shadow-lg shadow-blue-600/20">
+                    Login to Online Academy <ChevronRight size={18} />
+                  </Link>
                 </>
               )}
             </div>
           </div>
-        )}
-      </div>
-    </header>
+        </div>
+      )}
+    </>
   );
 });
 
@@ -224,7 +335,7 @@ const Footer = memo(function Footer() {
         <div className="grid gap-8 md:grid-cols-3">
           <div>
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50"><GraduationCap size={19} className="text-blue-600" /></div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">OA</div>
               <span className="font-extrabold text-slate-800">Online Academy</span>
             </div>
             <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">Learn through structured courses, track your progress, and earn certificates through Online Academy.</p>
