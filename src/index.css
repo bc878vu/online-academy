@@ -70,17 +70,18 @@ footer .flex.items-center.gap-2 > div:first-child::before {
 .certificate-rule { width:68px; height:1px; background:linear-gradient(90deg,transparent,#d4af37); }
 .certificate-rule:last-child { background:linear-gradient(90deg,#d4af37,transparent); }
 
-/* Certificate printing: hide the application chrome and print one complete landscape page. */
+/* Certificate printing: use the complete browser print area and keep the certificate on exactly one page. */
 @media print {
   @page {
-    size: A4 landscape;
+    size: landscape;
     margin: 0;
   }
 
   html,
   body {
-    width: 297mm;
-    height: 210mm;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
@@ -96,60 +97,71 @@ footer .flex.items-center.gap-2 > div:first-child::before {
 
   .certificate-print-root {
     display: block !important;
-    width: 297mm !important;
-    height: 210mm !important;
-    min-height: 210mm !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 0 !important;
     margin: 0 !important;
-    padding: 8mm !important;
+    padding: 3.5vh 3.5vw !important;
     background: #fff !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .certificate-print-root > div {
     width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     margin: 0 !important;
+    padding: 0 !important;
   }
 
   .certificate-sheet {
     width: 100% !important;
-    height: 194mm !important;
+    height: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     border-radius: 0 !important;
     border: 0 !important;
     box-shadow: none !important;
     overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .certificate-sheet-inner {
     width: 100% !important;
-    height: 194mm !important;
-    min-height: 194mm !important;
-    padding: 9mm 14mm !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 4.5% 5.5% !important;
     border: 1px solid #d8e1ef !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .certificate-header-mark {
-    width: 48px !important;
-    height: 48px !important;
+    width: clamp(42px, 5vw, 54px) !important;
+    height: clamp(42px, 5vw, 54px) !important;
   }
 
   .certificate-watermark {
-    font-size: 150px !important;
+    font-size: clamp(110px, 15vw, 170px) !important;
   }
 
   .certificate-signatures {
-    margin-top: 12px !important;
+    margin-top: 2.5% !important;
   }
 
   .certificate-verified {
-    margin-top: 8px !important;
+    margin-top: 1.5% !important;
   }
 
   .certificate-verification {
-    margin-top: 3px !important;
+    margin-top: .6% !important;
   }
 }
