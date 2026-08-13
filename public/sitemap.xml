@@ -2,22 +2,18 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://online-academy-plum.vercel.app/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-08-14</lastmod>
   </url>
   <url>
     <loc>https://online-academy-plum.vercel.app/courses</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-08-14</lastmod>
   </url>
   <url>
     <loc>https://online-academy-plum.vercel.app/verify-certificate</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-08-14</lastmod>
   </url>
   <url>
-    <loc>https://online-academy-plum.vercel.app/verify-certificate?certificateId=OA-OMAMB7ZT-CKSBS3NG</loc>
-    <changefreq>yearly</changefreq>
-    <priority>1.0</priority>
+    <loc>https://online-academy-plum.vercel.app/verify-certificate?certificateId=OA-0MAMB7ZT-CKSBS3NG</loc>
+    <lastmod>2026-08-14</lastmod>
   </url>
 </urlset>
