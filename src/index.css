@@ -4,6 +4,57 @@
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
 
+/* Professional Online Academy brand mark */
+header a[href="/"] > div:first-child {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #0b3b8f 0%, #2563eb 58%, #4f46e5 100%) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, .24) !important;
+}
+header a[href="/"] > div:first-child svg { display: none; }
+header a[href="/"] > div:first-child::before {
+  content: "OA";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.06em;
+}
+header a[href="/"] > div:first-child::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  right: -6px;
+  top: -7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.16);
+}
+
+footer .flex.items-center.gap-2 > div:first-child {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #0b3b8f, #2563eb) !important;
+}
+footer .flex.items-center.gap-2 > div:first-child svg { display: none; }
+footer .flex.items-center.gap-2 > div:first-child::before {
+  content: "OA";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -.05em;
+}
+
 .certificate-sheet { position: relative; }
 .certificate-sheet-inner { position: relative; overflow: hidden; background: radial-gradient(circle at 50% 38%, rgba(37,99,235,.055), transparent 30%), linear-gradient(135deg,#fff 0%,#f8fbff 52%,#fffdf7 100%); border: 1px solid #d8e1ef !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.9); }
 .certificate-top-band,.certificate-bottom-band { position:absolute; left:0; right:0; height:4px; background:linear-gradient(90deg,#123b82 0%,#2563eb 35%,#d4af37 50%,#2563eb 65%,#123b82 100%); }
@@ -18,64 +69,3 @@ body { margin: 0; min-width: 320px; font-family: Inter, system-ui, -apple-system
 .certificate-header-mark { width:58px; height:58px; border-radius:50%; color:#fff; background:linear-gradient(145deg,#2563eb,#123b82); border:3px solid #fff; outline:2px solid #d4af37; box-shadow:0 7px 18px rgba(18,59,130,.18); }
 .certificate-rule { width:68px; height:1px; background:linear-gradient(90deg,transparent,#d4af37); }
 .certificate-rule:last-child { background:linear-gradient(90deg,#d4af37,transparent); }
-.certificate-kicker { margin:0; color:#123b82; font-size:11px; font-weight:800; letter-spacing:.34em; }
-.certificate-official-label { margin:0; color:#64748b; font-size:9px; font-weight:800; letter-spacing:.22em; }
-.certificate-title { margin-bottom:0; color:#0b1f3a; font-size:clamp(2rem,4vw,3.35rem); font-weight:900; line-height:1.05; letter-spacing:-.035em; }
-.certificate-title-line { width:130px; height:3px; border-radius:999px; background:linear-gradient(90deg,#2563eb,#d4af37,#2563eb); }
-.certificate-presented { color:#64748b; font-size:12px; }
-.certificate-student { color:#123b82; font-size:clamp(1.55rem,3vw,2.5rem); font-weight:900; line-height:1.1; }
-.certificate-course { color:#1d4ed8; font-size:clamp(1.3rem,2.4vw,2rem); font-weight:800; line-height:1.15; }
-.certificate-meta-card { min-width:0; padding:9px 12px; border:1px solid #dbe4f0; border-top:2px solid #2563eb; border-radius:9px; background:rgba(255,255,255,.82); box-shadow:0 2px 7px rgba(15,23,42,.035); }
-.certificate-meta-card p { margin:0 0 3px; color:#94a3b8; font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.12em; }
-.certificate-meta-card strong { display:flex; align-items:center; min-width:0; color:#172033; font-size:11px; font-weight:800; overflow-wrap:anywhere; }
-.certificate-valid { gap:5px; color:#047857 !important; }
-.certificate-signatures { width:100%; }
-.certificate-signature { flex:1 1 0; min-width:0; }
-.certificate-signature-line { width:100%; height:1px; background:#a8b4c4; }
-.certificate-signature p { margin:4px 0 0; color:#1e293b; font-size:10px; font-weight:800; }
-.certificate-signature span { color:#94a3b8; font-size:8px; }
-.certificate-seal { width:66px; height:66px; padding:4px; border:2px solid #d4af37; border-radius:50%; color:#123b82; background:#fffdf4; box-shadow:0 3px 10px rgba(212,175,55,.12); }
-.certificate-seal-inner { display:flex; width:100%; height:100%; flex-direction:column; align-items:center; justify-content:center; border:1px dashed #d4af37; border-radius:50%; }
-.certificate-seal-inner span { margin-top:1px; font-size:6px; font-weight:900; letter-spacing:.16em; }
-.certificate-verified { color:#047857; font-size:9px; font-weight:700; }
-.certificate-verification { color:#94a3b8; font-size:8px; }
-
-@media print {
-  @page { size:11in 8.5in; margin:0; }
-  html,body { width:11in !important; height:8.5in !important; min-width:0 !important; max-width:none !important; margin:0 !important; padding:0 !important; background:#fff !important; overflow:hidden !important; }
-  body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-  body * { visibility:hidden !important; }
-  .certificate-print-root,.certificate-print-root * { visibility:visible !important; }
-  .certificate-print-root { position:relative !important; display:block !important; width:11in !important; height:8.5in !important; min-height:8.5in !important; max-width:none !important; margin:0 !important; padding:0 !important; background:#fff !important; overflow:hidden !important; }
-  .certificate-print-root > div { width:11in !important; height:8.5in !important; max-width:none !important; margin:0 !important; padding:0 !important; }
-  .certificate-sheet { width:11in !important; height:8.5in !important; min-height:8.5in !important; max-height:8.5in !important; margin:0 !important; padding:.18in !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; overflow:hidden !important; page-break-before:avoid !important; page-break-after:avoid !important; page-break-inside:avoid !important; break-before:avoid-page !important; break-after:avoid-page !important; break-inside:avoid !important; }
-  .certificate-sheet-inner { width:100% !important; height:8.14in !important; min-height:8.14in !important; max-height:8.14in !important; padding:.22in .38in !important; border:1px solid #cbd5e1 !important; border-radius:0 !important; overflow:hidden !important; page-break-inside:avoid !important; break-inside:avoid !important; display:block !important; }
-  .certificate-top-band,.certificate-bottom-band { height:3px !important; }
-  .certificate-corner { width:22px !important; height:22px !important; border-width:1px !important; }
-  .certificate-corner-tl { top:12px !important; left:12px !important; } .certificate-corner-tr { top:12px !important; right:12px !important; } .certificate-corner-bl { bottom:12px !important; left:12px !important; } .certificate-corner-br { right:12px !important; bottom:12px !important; }
-  .certificate-content { width:100% !important; height:100% !important; max-width:none !important; display:flex !important; flex-direction:column !important; justify-content:center !important; align-items:stretch !important; }
-  .certificate-header-mark { width:52px !important; height:52px !important; }
-  .certificate-kicker { font-size:10px !important; } .certificate-official-label { font-size:8px !important; } .certificate-title { font-size:31px !important; line-height:1 !important; } .certificate-presented { font-size:10px !important; } .certificate-student { font-size:25px !important; } .certificate-course { font-size:19px !important; }
-  .certificate-meta { margin-top:11px !important; } .certificate-meta-card { padding:7px 10px !important; } .certificate-meta-card p { font-size:7px !important; } .certificate-meta-card strong { font-size:9px !important; }
-  .certificate-signatures { margin-top:12px !important; } .certificate-seal { width:58px !important; height:58px !important; } .certificate-signature p { font-size:8px !important; } .certificate-signature span { font-size:7px !important; } .certificate-verified { margin-top:8px !important; font-size:8px !important; } .certificate-verification { margin-top:2px !important; font-size:7px !important; } .certificate-watermark { font-size:180px !important; }
-}
-
-/* Online Academy visual identity */
-:root { --oa-navy:#102a56; --oa-blue:#2563eb; --oa-gold:#c7a227; --oa-cream:#fffdf5; }
-header a[href="/"] > div:first-child { position:relative; background:linear-gradient(145deg,var(--oa-navy),#1d4ed8) !important; border-radius:14px !important; box-shadow:0 8px 20px rgba(16,42,86,.22) !important; overflow:hidden; }
-header a[href="/"] > div:first-child svg { display:none !important; }
-header a[href="/"] > div:first-child::before { content:"OA"; display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#fff; font-size:17px; font-weight:900; letter-spacing:-.08em; }
-header a[href="/"] > div:first-child::after { content:""; position:absolute; right:5px; bottom:5px; width:6px; height:6px; border-radius:50%; background:var(--oa-gold); box-shadow:0 0 0 2px rgba(255,255,255,.7); }
-footer .bg-blue-50 { position:relative; background:linear-gradient(145deg,var(--oa-navy),#1d4ed8) !important; overflow:hidden; }
-footer .bg-blue-50 svg { display:none !important; }
-footer .bg-blue-50::before { content:"OA"; display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:900; letter-spacing:-.08em; }
-body > #root > div > div:first-child:has(.animate-spin) { background:radial-gradient(circle at 50% 40%,#eaf2ff 0,#f8fafc 42%,#fffdf5 100%) !important; }
-main section:first-child .rounded-3xl.border.border-white\/10 { border-color:rgba(199,162,39,.24) !important; background:linear-gradient(145deg,rgba(37,99,235,.12),rgba(16,42,86,.28)) !important; box-shadow:0 28px 70px rgba(2,12,35,.38) !important; }
-main section:first-child .rounded-2xl.bg-white.p-6 { position:relative; overflow:hidden; border:1px solid #d9e3f1; box-shadow:0 18px 45px rgba(15,23,42,.18) !important; }
-main section:first-child .rounded-2xl.bg-white.p-6::before { content:""; position:absolute; left:0; top:0; right:0; height:4px; background:linear-gradient(90deg,var(--oa-navy),var(--oa-blue),var(--oa-gold),var(--oa-blue),var(--oa-navy)); }
-main section:first-child .bg-blue-50 { background:#f5f8ff !important; }
-main section:first-child .text-blue-600 { color:var(--oa-blue) !important; }
-.certificate-header-mark { position:relative; }
-.certificate-header-mark svg { display:none !important; }
-.certificate-header-mark::before { content:"OA"; display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#fff; font-size:15px; font-weight:900; letter-spacing:-.08em; }
-@media (max-width:640px) { header a[href="/"] > div:first-child { width:42px; height:42px; } header a[href="/"] > div:first-child::before { font-size:15px; } }
