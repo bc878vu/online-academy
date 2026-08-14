@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.email == 'admin@onlineacademy.com'; }
+    function owner() { return signedIn() && request.auth.uid == request.resource.data.userId; }
+    function existingOwner() { return signedIn() && request.auth.uid == resource.data.userId; }
+
+    match /courses/{courseId} {
+      allow read: if true;
+      allow create, update, delete: if admin();
+    }
+
+    match /lessonProgress/{progressId} {
+      allow read: if existingOwner() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if owner();
+      allow update: if existingOwner() && request.resource.data.userId == resource.data.userId;
+      allow delete: if existingOwner() || admin();
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
