@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle, Clock3, Loader2, Mail, ShieldCheck } from "luci
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 
-const RESET_PATH = "/reset-password";
+const RESET_URL = "https://online-academy-plum.vercel.app/reset-password";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -30,12 +30,12 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-      // The Firebase email-action handler must be configured in the Firebase
-      // Authentication email templates to use this website URL. Firebase then
-      // appends mode/oobCode/apiKey to this route so our React screen can own
-      // the complete reset experience instead of the default Firebase widget.
+      // This is the production Online Academy URL. It is passed as the
+      // continue/state URL; Firebase's Email Templates → Customize action URL
+      // must also point to this same custom handler for the email link itself
+      // to open the Academy page instead of Firebase's hosted widget.
       const actionCodeSettings = {
-        url: `${window.location.origin}${RESET_PATH}`,
+        url: RESET_URL,
         handleCodeInApp: false,
       };
 
@@ -55,7 +55,7 @@ function ForgotPassword() {
         "auth/too-many-requests": "Too many reset requests. Please wait a little and try again.",
         "auth/network-request-failed": "Network error. Please check your internet connection and try again.",
         "auth/operation-not-allowed": "Email/password authentication is not enabled in Firebase Authentication.",
-        "auth/unauthorized-continue-uri": "The reset website URL is not authorized in Firebase Authentication. Add this website domain to Firebase Authentication → Settings → Authorized domains.",
+        "auth/unauthorized-continue-uri": "The reset website URL is not authorized in Firebase Authentication. Add online-academy-plum.vercel.app to Firebase Authentication → Settings → Authorized domains.",
         "auth/invalid-continue-uri": "The password reset website URL is not valid. Please check the Firebase Authentication email-action configuration.",
       };
 
