@@ -147,8 +147,6 @@ function Dashboard() {
     setError("");
 
     try {
-      // Do not use orderBy here. This keeps the dashboard independent of
-      // Firestore composite indexes and matches the fixed Home page fetch.
       const [courseSnapshot, progressSnapshot] = await Promise.all([
         getDocs(collection(db, "courses")),
         user?.uid
@@ -204,11 +202,12 @@ function Dashboard() {
       if (!byCourse[courseId]) byCourse[courseId] = { completed: 0, total: 0, watchedSeconds: 0, records: 0 };
 
       const bucket = byCourse[courseId];
-      const completed = item.completed25 === true || Number(item.percent) >= 25;
+      const requiredPercent = Number(item.requiredWatchPercent || 25);
+      const completed = item.completed === true || Number(item.percent) >= requiredPercent;
       if (completed) bucket.completed += 1;
       bucket.total += 1;
       bucket.records += 1;
-      bucket.watchedSeconds += Number(item.watchedSeconds) || 0;
+      bucket.watchedSeconds += Number(item.activeWatchSeconds ?? item.watchedSeconds ?? 0) || 0;
     });
 
     return byCourse;
@@ -234,7 +233,7 @@ function Dashboard() {
     const totalCompleted = learningCourses.reduce((sum, course) => sum + course.completed, 0);
     const totalLessons = learningCourses.reduce((sum, course) => sum + course.totalLessons, 0);
     const overallProgress = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
-    const watchedSeconds = progressDocs.reduce((sum, item) => sum + (Number(item.watchedSeconds) || 0), 0);
+    const watchedSeconds = progressDocs.reduce((sum, item) => sum + (Number(item.activeWatchSeconds ?? item.watchedSeconds ?? 0) || 0), 0);
     const completedCourses = learningCourses.filter((course) => course.percent >= 100).length;
 
     return { enrolled, overallProgress, watchedSeconds, completedCourses };
