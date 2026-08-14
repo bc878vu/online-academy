@@ -22,6 +22,24 @@
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"WebSite","name":"Online Academy","alternateName":"Online Academy Learning Platform","url":"https://online-academy-plum.vercel.app/"}
     </script>
+    <style>
+      /* Course thumbnails: preserve the complete artwork on every card/device. */
+      article > div.relative[class~="h-44"],
+      article > div.relative[class~="h-48"] {
+        height: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 16 / 9 !important;
+      }
+
+      article > div.relative[class~="h-44"] img,
+      article > div.relative[class~="h-48"] img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        object-position: center !important;
+        background: #020617 !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
