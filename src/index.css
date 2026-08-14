@@ -142,6 +142,168 @@ footer > div > div:last-child a:hover { color:#bfdbfe; }
   footer > div > div:first-child { padding:18px !important; }
 }
 
+/* Course media viewer: keep the player, controls and surrounding layout isolated. */
+#lesson-player section {
+  position: relative !important;
+  isolation: isolate;
+  max-width: 100%;
+}
+
+#lesson-player section > div:first-child {
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate;
+}
+
+#lesson-player section iframe {
+  border: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+}
+
+/* The custom control layer must sit above the YouTube iframe. Its opaque lower surface prevents YouTube's own chrome from showing through. */
+#lesson-player section [class*="inset-x-0"][class*="bottom-0"] {
+  z-index: 40 !important;
+  pointer-events: auto !important;
+  background: linear-gradient(to top, rgba(2,6,23,1) 0%, rgba(2,6,23,.98) 54%, rgba(2,6,23,.76) 82%, rgba(2,6,23,0) 100%) !important;
+}
+
+#lesson-player section [class*="inset-x-0"][class*="bottom-0"] > div:first-child {
+  position: relative;
+  z-index: 1;
+}
+
+#lesson-player section > div:first-child > button {
+  z-index: 35 !important;
+  pointer-events: auto !important;
+}
+
+#lesson-player section > div:first-child > div:not([class*="inset-x-0"]) {
+  max-width: 100%;
+}
+
+/* Do not let the media iframe steal clicks from the academy controls. */
+#lesson-player section iframe + * { pointer-events: auto; }
+
+/* Fullscreen: the media area fills the viewport instead of keeping a 16:9 box. */
+#lesson-player section:fullscreen,
+#lesson-player section:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #020617 !important;
+}
+
+#lesson-player section:fullscreen > div:first-child,
+#lesson-player section:-webkit-full-screen > div:first-child {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+}
+
+#lesson-player section:fullscreen > div:first-child video,
+#lesson-player section:-webkit-full-screen > div:first-child video,
+#lesson-player section:fullscreen > div:first-child iframe,
+#lesson-player section:-webkit-full-screen > div:first-child iframe {
+  object-fit: contain !important;
+}
+
+/* Desktop control row: stable one-line alignment. */
+#lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] {
+  position: relative;
+  z-index: 41 !important;
+  min-width: 0;
+}
+
+/* Tablet/mobile: intentionally use two clean rows instead of letting controls collide or wrap unpredictably. */
+@media (max-width: 639px) {
+  #lesson-player section {
+    border-radius: 20px !important;
+  }
+
+  #lesson-player section > div:first-child {
+    min-height: 0;
+  }
+
+  #lesson-player section > div:first-child > button {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  #lesson-player section [class*="inset-x-0"][class*="bottom-0"] {
+    padding: 46px 10px 10px !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    row-gap: 8px !important;
+    column-gap: 6px !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] > button {
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] > span {
+    min-width: 76px !important;
+    flex: 1 1 auto !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] > div[class*="ml-auto"] {
+    width: 100% !important;
+    margin-left: 0 !important;
+    justify-content: flex-end !important;
+    padding-top: 2px;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] select {
+    min-height: 34px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] > div[class*="ml-auto"] > button {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  #lesson-player section [class*="h-1.5"] {
+    height: 4px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  #lesson-player section [class*="inset-x-0"][class*="bottom-0"] {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  #lesson-player section [class*="flex-wrap"][class*="items-center"][class*="text-white"] > span {
+    min-width: 68px !important;
+    font-size: 10px !important;
+  }
+}
+
+/* Keep the attendance/status strip visually separate from media controls. */
+#lesson-player section > div:last-child {
+  position: relative;
+  z-index: 45;
+  min-height: 44px;
+}
+
 @media print {
   @page { size: landscape; margin: 0; }
   html, body { width:100% !important; height:100% !important; min-width:0 !important; margin:0 !important; padding:0 !important; background:#fff !important; overflow:hidden !important; }
