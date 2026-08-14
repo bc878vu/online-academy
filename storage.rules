@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.email == 'admin@onlineacademy.com'; }
+
+    match /courseVideos/{lessonId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if admin();
+    }
+
+    match /courseThumbnails/{lessonId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if admin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
