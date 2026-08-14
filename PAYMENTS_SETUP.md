@@ -52,13 +52,33 @@ The checkout API does not trust a price sent by the browser. It loads the order 
 
 Course access must only be granted after a verified successful gateway result or an explicit admin reconciliation. Do not change this to client-side-only payment confirmation.
 
-## 5. Important Firebase key note
+## 5. PayFast website compliance checklist
+
+Before requesting merchant activation, make sure the public website visibly contains:
+
+- Privacy Policy
+- Terms & Conditions
+- Refund & Cancellation Policy
+- Service & Delivery Policy
+- Clear description of the digital services/courses being sold
+- At least 7–8 clearly described course/service offerings or categories
+- Local office/business address
+- Customer support/contact number
+- Support email address
+
+The Online Academy `/terms` page now contains the Terms & Conditions, Privacy Policy, Refund & Cancellation Policy, Service & Delivery Policy, and eight course/service categories in one public page.
+
+**Action required before PayFast review:** replace the contact placeholders on the page (`ADD SUPPORT EMAIL`, `ADD BUSINESS CONTACT NUMBER`, `ADD LOCAL OFFICE ADDRESS`) with the real business contact details. Do not publish invented contact information.
+
+Because Online Academy sells digital educational services, the Service & Delivery Policy states that no physical product is shipped and explains that verified paid course access is delivered electronically through the learner account.
+
+## 6. Important Firebase key note
 
 `FIREBASE_WEB_API_KEY` is a client Firebase configuration value and is not a replacement for the service-account private key. `FIREBASE_PRIVATE_KEY` and `PAYFAST_SECURED_KEY` are secrets and must never be committed to the repository.
 
 If a real private key or PayFast secured key has ever been exposed publicly, revoke/regenerate it before production use.
 
-## 6. Test checklist
+## 7. Test checklist
 
 1. Deploy the latest commit to Vercel.
 2. Add PayFast sandbox `MERCHANT_ID` and `SECURED_KEY` to Vercel server environment variables.
@@ -69,3 +89,4 @@ If a real private key or PayFast secured key has ever been exposed publicly, rev
 7. Confirm the callback reaches `/api/payfast-callback`.
 8. Confirm the order is not marked `paid` merely because the browser returned to the success URL.
 9. Verify the final paid state only after the gateway result has been validated.
+10. Before production activation, replace all public contact placeholders with verified business details.
