@@ -14,49 +14,53 @@ import {
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { auth } from "../firebase";
 
-const SUCCESS_PARAM = "resetSuccess";
-
 function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const resetCompleted = searchParams.get(SUCCESS_PARAM) === "1";
-
-  // Firebase custom email action handlers normally receive the code directly
-  // as ?oobCode=. We also support a nested continueUrl so older/generated
-  // action links can still reach the same reset screen.
+  // Firebase's custom email action handler sends these values directly to the
+  // Online Academy route. This lets us completely avoid Firebase's generic
+  // hosted password-reset page.
   const actionData = useMemo(() => {
-    if (resetCompleted) {
-      return { oobCode: "", mode: "resetPassword" };
-    }
-
     const directCode = searchParams.get("oobCode") || "";
     const directMode = searchParams.get("mode") || "";
     const continueUrl = searchParams.get("continueUrl") || "";
 
     if (directCode) {
-      return { oobCode: directCode, mode: directMode || "resetPassword" };
+      return {
+        oobCode: directCode,
+        mode: directMode || "resetPassword",
+        continueUrl,
+      };
     }
 
+    // Backward compatibility for older generated links that nested the action
+    // values inside continueUrl.
     if (continueUrl) {
       try {
         const nested = new URL(continueUrl, window.location.origin);
         return {
           oobCode: nested.searchParams.get("oobCode") || "",
           mode: nested.searchParams.get("mode") || "resetPassword",
+          continueUrl: nested.searchParams.get("continueUrl") || "",
         };
       } catch {
-        return { oobCode: "", mode: "resetPassword" };
+        // Ignore malformed nested URLs and fall through to the clean landing
+        // state below.
       }
     }
 
-    return { oobCode: "", mode: directMode };
-  }, [searchParams, resetCompleted]);
+    return {
+      oobCode: "",
+      mode: directMode,
+      continueUrl: "",
+    };
+  }, [searchParams]);
 
   const oobCode = actionData.oobCode;
   const actionMode = actionData.mode;
 
-  const [checking, setChecking] = useState(!resetCompleted);
+  const [checking, setChecking] = useState(Boolean(oobCode));
   const [validCode, setValidCode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,32 +69,26 @@ function ResetPassword() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(resetCompleted);
 
   useEffect(() => {
-    if (resetCompleted) {
-      setChecking(false);
-      setSuccess(true);
-      setValidCode(false);
-      return undefined;
-    }
-
     let active = true;
 
     const validateCode = async () => {
-      if (actionMode && actionMode !== "resetPassword") {
+      // A bare /reset-password URL is not a reset action. Keep the page clean
+      // instead of showing the confusing "invalid link" screen that appeared
+      // after Firebase's old hosted widget Continue button.
+      if (!oobCode) {
         if (active) {
-          setError("This link is not a password reset link.");
           setChecking(false);
+          setValidCode(false);
+          setError("");
         }
         return;
       }
 
-      if (!oobCode) {
+      if (actionMode && actionMode !== "resetPassword") {
         if (active) {
-          setError(
-            "This password reset link is missing, incomplete, or invalid. Please request a new one."
-          );
+          setError("This link is not a password reset link.");
           setChecking(false);
         }
         return;
@@ -101,6 +99,7 @@ function ResetPassword() {
         if (!active) return;
         setEmail(accountEmail || "");
         setValidCode(true);
+        setError("");
       } catch (firebaseError) {
         console.error("Password reset code validation error:", firebaseError);
         if (!active) return;
@@ -136,7 +135,7 @@ function ResetPassword() {
     return () => {
       active = false;
     };
-  }, [actionMode, oobCode, resetCompleted]);
+  }, [actionMode, oobCode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -175,18 +174,13 @@ function ResetPassword() {
     setLoading(true);
 
     try {
-      // Firebase consumes the action code here. A successful confirmation
-      // invalidates this reset code, so the same email link cannot be reused.
+      // Firebase consumes this one-time action code. Once this succeeds the
+      // reset link cannot be reused.
       await confirmPasswordReset(auth, oobCode, password);
 
-      // Remove the one-time oobCode from the browser URL immediately. This
-      // prevents a refresh/back navigation from showing an invalid-link error
-      // after a successful password change.
-      navigate(`/reset-password?${SUCCESS_PARAM}=1`, { replace: true });
-      setSuccess(true);
-      setValidCode(false);
-      setPassword("");
-      setConfirmPassword("");
+      // Never leave the consumed oobCode in browser history. Go directly to
+      // the Academy login page instead of Firebase's generic result page.
+      navigate("/login?passwordReset=success", { replace: true });
     } catch (firebaseError) {
       console.error("Password update error:", firebaseError);
 
@@ -217,6 +211,43 @@ function ResetPassword() {
     }
   };
 
+  // This state is only reached when someone opens /reset-password without a
+  // Firebase action code. It is intentionally not an "invalid link" error.
+  // A real email reset link always contains oobCode and opens the form below.
+  if (!oobCode && !error && !checking) {
+    return (
+      <main className="min-h-[calc(100vh-76px)] bg-slate-50 px-5 py-10 sm:px-6 sm:py-14">
+        <div className="mx-auto flex w-full max-w-md items-center justify-center">
+          <section className="w-full rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200 sm:p-8">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <KeyRound size={32} />
+            </div>
+            <h1 className="mt-5 text-2xl font-bold text-slate-900">
+              Password Reset
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Open the password reset link from your email to create a new
+              password.
+            </p>
+            <Link
+              to="/forgot-password"
+              className="mt-7 flex w-full items-center justify-center rounded-xl bg-blue-600 py-3.5 font-semibold text-white shadow-md shadow-blue-600/15 transition hover:bg-blue-700"
+            >
+              Request New Reset Link
+            </Link>
+            <Link
+              to="/login"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-blue-600"
+            >
+              <ArrowLeft size={16} />
+              Back to Login
+            </Link>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-[calc(100vh-76px)] bg-slate-50 px-5 py-10 sm:px-6 sm:py-14">
       <div className="mx-auto flex w-full max-w-md items-center justify-center">
@@ -240,26 +271,6 @@ function ResetPassword() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Please wait while we verify your secure password reset link.
               </p>
-            </div>
-          ) : success ? (
-            <div className="py-10 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <CheckCircle size={34} />
-              </div>
-              <h1 className="mt-5 text-2xl font-bold text-slate-900">
-                New Password Set
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Your new password has been set successfully. You can now sign in
-                to your Online Academy account with your new password.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate("/login", { replace: true })}
-                className="mt-7 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white shadow-md shadow-blue-600/15 transition hover:bg-blue-700"
-              >
-                Continue to Login
-              </button>
             </div>
           ) : (
             <>
