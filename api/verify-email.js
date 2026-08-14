@@ -1,8 +1,7 @@
 import { getConfig, getIdentityAccessToken, verifyFirebaseIdToken } from "./_firebase.js";
 
 const IDENTITY_PROJECT_URL = "https://identitytoolkit.googleapis.com/v1/projects";
-const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
-const UPDATE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:update";
+const UPDATE_URL = "https://identitytoolkit.googleapis.com/v1/projects";
 const RESEND_URL = "https://api.resend.com/emails";
 
 function json(res, status, body) {
@@ -87,11 +86,14 @@ async function sendFirebaseVerificationEmailServer(email, idToken, appUrl) {
 }
 
 async function completeVerification(oobCode) {
-  const { apiKey } = getConfig();
-  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
-  const response = await fetch(`${UPDATE_URL}?key=${encodeURIComponent(apiKey)}`, {
+  const { projectId } = getConfig();
+  const accessToken = await getIdentityAccessToken();
+  const response = await fetch(`${UPDATE_URL}/${encodeURIComponent(projectId)}/accounts:update`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ oobCode }),
   });
 
@@ -100,7 +102,7 @@ async function completeVerification(oobCode) {
     const code = data?.error?.message || "VERIFICATION_FAILED";
     const error = new Error(code);
     error.code = code;
-    error.status = 400;
+    error.status = code.includes("INVALID") || code.includes("EXPIRED") ? 400 : response.status;
     throw error;
   }
   return data;
@@ -184,13 +186,13 @@ export default async function handler(req, res) {
     } catch (error) {
       if (!isResendDomainRestriction(error)) throw error;
 
-      // Resend is still in testing mode. Use the official Identity Platform
-      // OAuth endpoint for the temporary fallback instead of the browser-
-      // restricted Firebase Web API key from the Vercel server.
+      // Resend is still in testing mode. Use Identity Platform's OAuth-backed
+      // email sender as the temporary fallback. This path does not use the
+      // browser-restricted Firebase Web API key.
       await sendFirebaseVerificationEmailServer(user.email, idToken, appUrl);
       return json(res, 200, {
         ok: true,
-        message: "Verification email sent. Your custom Online Academy email will be used after the Resend domain is verified.",
+        message: "Verification email sent. The custom Online Academy email will be used after the Resend domain is verified.",
         delivery: "firebase-fallback",
       });
     }
