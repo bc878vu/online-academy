@@ -39,6 +39,130 @@
         object-position: center !important;
         background: #020617 !important;
       }
+
+      /* Lesson media: one responsive 16:9 surface, never an oversized mobile box. */
+      section.bg-slate-950.shadow-2xl > div.relative.w-full {
+        width: 100% !important;
+        aspect-ratio: 16 / 9 !important;
+        min-height: 0 !important;
+        max-height: min(78vh, 760px) !important;
+      }
+
+      section.bg-slate-950.shadow-2xl > div.relative.w-full > iframe,
+      section.bg-slate-950.shadow-2xl > div.relative.w-full > video {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+      }
+
+      /* Keep the custom controls attached to the bottom edge of the media. */
+      section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 {
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Attendance status has a stable footprint. The save spinner is deliberately
+         hidden so a background Firestore write cannot make “Present” flicker. */
+      section.bg-slate-950.shadow-2xl > div:last-child {
+        min-height: 48px !important;
+        box-sizing: border-box !important;
+      }
+
+      section.bg-slate-950.shadow-2xl > div:last-child > span:last-child {
+        min-width: 120px !important;
+        text-align: right !important;
+        white-space: nowrap !important;
+      }
+
+      section.bg-slate-950.shadow-2xl > div:last-child svg.animate-spin {
+        display: none !important;
+      }
+
+      @media (max-width: 767px) {
+        section.bg-slate-950.shadow-2xl {
+          width: 100% !important;
+          max-width: 100% !important;
+          border-radius: 16px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full {
+          aspect-ratio: 16 / 9 !important;
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 {
+          padding: 34px 8px 8px !important;
+        }
+
+        /* Mobile controls stay in a compact single bottom row instead of
+           expanding into the middle of the video. */
+        section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 > div.flex.flex-col {
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 6px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 > div.flex.flex-col > div.flex.min-w-0.flex-1 {
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+          gap: 4px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 > div.flex.flex-col > div.flex.w-full {
+          width: auto !important;
+          flex: 0 0 auto !important;
+          margin-left: 0 !important;
+          gap: 4px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full button {
+          width: 34px !important;
+          height: 34px !important;
+          min-width: 34px !important;
+          min-height: 34px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full select {
+          width: 52px !important;
+          height: 34px !important;
+          min-height: 34px !important;
+          padding-left: 2px !important;
+          padding-right: 2px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div.relative.w-full input[type="range"] {
+          margin-bottom: 6px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div:last-child {
+          min-height: 46px !important;
+          padding: 8px 10px !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div:last-child > span:first-child {
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        section.bg-slate-950.shadow-2xl > div:last-child > span:last-child {
+          min-width: 96px !important;
+          flex: 0 0 auto !important;
+          font-size: 10px !important;
+        }
+      }
+
+      @media (min-width: 768px) {
+        section.bg-slate-950.shadow-2xl > div.relative.w-full {
+          min-height: 0 !important;
+        }
+      }
     </style>
   </head>
   <body>
