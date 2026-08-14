@@ -19,16 +19,17 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
-function getAppUrl(req) {
+function getAppUrl() {
   return String(process.env.PUBLIC_APP_URL || "https://online-academy-plum.vercel.app")
     .trim()
     .replace(/\/$/, "");
 }
 
-async function generateVerificationCode(email, appUrl) {
-  const { projectId } = getConfig();
+async function generateVerificationCode(email) {
+  const { projectId, apiKey } = getConfig();
+  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
   const accessToken = await getIdentityAccessToken();
-  const response = await fetch(`${IDENTITY_URL}?key=${encodeURIComponent((process.env.FIREBASE_WEB_API_KEY || process.env.VITE_FIREBASE_API_KEY || "").trim())}`, {
+  const response = await fetch(`${IDENTITY_URL}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -39,7 +40,6 @@ async function generateVerificationCode(email, appUrl) {
       email,
       returnOobLink: true,
       targetProjectId: projectId,
-      continueUrl: `${appUrl}/dashboard`,
     }),
   });
 
@@ -99,8 +99,8 @@ export default async function handler(req, res) {
     if (!user.email) return json(res, 400, { error: "This account does not have an email address" });
     if (user.emailVerified === true) return json(res, 400, { error: "Email is already verified" });
 
-    const appUrl = getAppUrl(req);
-    const oobCode = await generateVerificationCode(user.email, appUrl);
+    const appUrl = getAppUrl();
+    const oobCode = await generateVerificationCode(user.email);
     const verificationUrl = `${appUrl}/verify-email?oobCode=${encodeURIComponent(oobCode)}`;
     await sendBrandedEmail(user.email, user.displayName || user.email.split("@")[0] || "Student", verificationUrl);
 
