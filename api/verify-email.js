@@ -1,6 +1,7 @@
 import { getConfig, getIdentityAccessToken, verifyFirebaseIdToken } from "./_firebase.js";
 
 const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
+const UPDATE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:update";
 const RESEND_URL = "https://api.resend.com/emails";
 
 function json(res, status, body) {
@@ -53,6 +54,26 @@ async function generateVerificationCode(email) {
   return data.oobCode;
 }
 
+async function completeVerification(oobCode) {
+  const { apiKey } = getConfig();
+  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
+  const response = await fetch(`${UPDATE_URL}?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ oobCode }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = data?.error?.message || "VERIFICATION_FAILED";
+    const error = new Error(code);
+    error.code = code;
+    error.status = 400;
+    throw error;
+  }
+  return data;
+}
+
 async function sendBrandedEmail(email, displayName, verificationUrl) {
   const apiKey = String(process.env.RESEND_API_KEY || "").trim();
   const from = String(process.env.RESEND_FROM_EMAIL || "").trim();
@@ -91,6 +112,15 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
 
   try {
+    const action = String(req.body?.action || "send").trim();
+
+    if (action === "complete") {
+      const oobCode = String(req.body?.oobCode || "").trim();
+      if (!oobCode) return json(res, 400, { error: "Verification code is required" });
+      const result = await completeVerification(oobCode);
+      return json(res, 200, { ok: true, email: result.email || null });
+    }
+
     const authHeader = String(req.headers.authorization || "");
     const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
     if (!idToken) return json(res, 401, { error: "Authentication required" });
@@ -107,6 +137,6 @@ export default async function handler(req, res) {
     return json(res, 200, { ok: true, message: "Verification email sent" });
   } catch (error) {
     console.error("Verify email error:", error?.message || error);
-    return json(res, 500, { error: error?.message || "Unable to send verification email" });
+    return json(res, Number(error?.status) || 500, { error: error?.message || "Unable to send verification email" });
   }
 }
