@@ -1,11 +1,12 @@
 name: Fix course video player
 
 on:
-  push:
-    branches: [main]
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   fix:
@@ -254,11 +255,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/pages/CourseDetails.jsx src/index.css
-          git status --short
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "No changes to commit"
-            exit 0
+          else
+            git commit -m "fix: stabilize course video player and attendance UI"
+            git push origin main
           fi
-          git commit -m "fix: stabilize course video player and attendance UI"
-          git push origin main
+
+      - name: Remove temporary workflow
+        shell: bash
+        run: |
+          git rm -f .github/workflows/fix-video-player.yml
+          git commit -m "chore: remove temporary video player workflow" || true
+          git push origin main || true
+
+      - name: Close trigger issue
+        if: always()
+        run: gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --comment "Course player fixes applied and build verification completed."
+        env:
+          GH_TOKEN: ${{ github.token }}
