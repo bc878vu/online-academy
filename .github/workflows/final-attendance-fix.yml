@@ -1,0 +1,43 @@
+name: Final attendance sync fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-attendance-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Add non-destructive server attendance sync
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/CourseDetails.jsx')
+          s = p.read_text()
+          marker = '  const lessonKey = `${courseId}:${lesson?.id || ""}:${user?.uid || ""}`;\n\n'
+          addition = '''  const lessonKey = `${courseId}:${lesson?.id || ""}:${user?.uid || ""}`;\n\n  // Sync a completed attendance result arriving from Firestore without resetting the player.\n  useEffect(() => {\n    if (initialProgress?.completed === true) {\n      completedRef.current = true;\n      stateRef.current.completed = true;\n      setAttendanceReady(true);\n    }\n  }, [initialProgress?.completed]);\n\n'''
+          if marker not in s:
+              raise SystemExit('marker not found')
+          if 'Sync a completed attendance result arriving from Firestore' not in s:
+              s = s.replace(marker, addition, 1)
+          p.write_text(s)
+          PY
+          npm ci
+          npm run build
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/CourseDetails.jsx
+          git commit -m 'fix: sync completed attendance without player reset'
+          git push
