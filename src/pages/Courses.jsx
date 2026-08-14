@@ -45,14 +45,7 @@ function CourseCard({ course, user, favorite, onToggleFavorite }) {
       {image ? <img src={image} alt={title} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800"><BookOpen size={54} className="text-white/90" /></div>}
       {paid && <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700 shadow-sm">{money(price)}</span>}
       {discount > 0 && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-black text-white"><BadgePercent size={14} />{discount}% OFF</span>}
-      <button
-        type="button"
-        onClick={() => onToggleFavorite(course.id)}
-        className={`absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition ${favorite ? "border-red-200 bg-white text-red-500" : "border-white/40 bg-slate-950/60 text-white hover:bg-white hover:text-red-500"}`}
-        aria-label={favorite ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`}
-        aria-pressed={favorite}
-        title={favorite ? "Remove from wishlist" : "Add to wishlist"}
-      >
+      <button type="button" onClick={() => onToggleFavorite(course.id)} className={`absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition ${favorite ? "border-red-200 bg-white text-red-500" : "border-white/40 bg-slate-950/60 text-white hover:bg-white hover:text-red-500"}`} aria-label={favorite ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`} aria-pressed={favorite} title={favorite ? "Remove from wishlist" : "Add to wishlist"}>
         <Heart size={18} fill={favorite ? "currentColor" : "none"} />
       </button>
     </div>
@@ -78,35 +71,26 @@ export default function Courses({ user }) {
   const [sort, setSort] = useState("newest");
   const [showFavorites, setShowFavorites] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(favoritesKey) || "[]");
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem(favoritesKey) || "[]"); } catch { return []; }
   });
 
-  useEffect(() => {
-    try { localStorage.setItem(favoritesKey, JSON.stringify(favoriteIds)); } catch {}
-  }, [favoriteIds, favoritesKey]);
+  useEffect(() => { try { localStorage.setItem(favoritesKey, JSON.stringify(favoriteIds)); } catch {} }, [favoriteIds, favoritesKey]);
 
   const loadCourses = useCallback(async () => {
     try {
-      setLoading(true);
-      setError("");
+      setLoading(true); setError("");
       const snapshot = await getDocs(query(collection(db, "courses"), where("published", "==", true)));
       setCourses(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
     } catch (err) {
       console.error("Courses loading error:", err);
       setError(err?.message || "Unable to load courses.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadCourses(); }, [loadCourses]);
 
-  const categories = useMemo(() => [...new Set(courses.map((course) => String(course.category || "Online Course").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [courses]);
-  const levels = useMemo(() => [...new Set(courses.map((course) => String(course.level || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [courses]);
+  const categories = useMemo(() => [...new Set(safeArray(courses).map((course) => String(course.category || "Online Course").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [courses]);
+  const levels = useMemo(() => [...new Set(safeArray(courses).map((course) => String(course.level || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [courses]);
 
   const toggleFavorite = useCallback((courseId) => {
     setFavoriteIds((current) => current.includes(courseId) ? current.filter((id) => id !== courseId) : [...current, courseId]);
@@ -114,7 +98,7 @@ export default function Courses({ user }) {
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    const result = courses.filter((course) => {
+    const result = safeArray(courses).filter((course) => {
       const matchesSearch = !term || [course.title, course.description, course.category, course.level].some((v) => String(v || "").toLowerCase().includes(term));
       const matchesCategory = category === "all" || String(course.category || "Online Course") === category;
       const matchesLevel = level === "all" || String(course.level || "") === level;
@@ -137,12 +121,7 @@ export default function Courses({ user }) {
   }, [category, courses, favoriteIds, level, searchTerm, showFavorites, sort, type]);
 
   const resetFilters = () => {
-    setSearchTerm("");
-    setCategory("all");
-    setLevel("all");
-    setType("all");
-    setSort("newest");
-    setShowFavorites(false);
+    setSearchTerm(""); setCategory("all"); setLevel("all"); setType("all"); setSort("newest"); setShowFavorites(false);
   };
 
   if (loading) return <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-12"><div className="mx-auto max-w-7xl"><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{[1,2,3].map((i) => <div key={i} className="h-96 animate-pulse rounded-3xl bg-white ring-1 ring-slate-200" />)}</div></div></main>;
