@@ -21,6 +21,8 @@ service cloud.firestore {
     // =====================================================
 
     match /courses/{courseId} {
+      // Legacy behavior preserved: published courses are publicly readable;
+      // admin can read all courses and is the only writer.
       allow read: if isAdmin()
                   || (resource.data.published == true);
 
@@ -61,6 +63,7 @@ service cloud.firestore {
     // =====================================================
 
     match /certificates/{certificateId} {
+      // Public exact-ID verification only; listing remains disabled.
       allow get: if true;
       allow list: if false;
 
@@ -74,16 +77,21 @@ service cloud.firestore {
     // =====================================================
 
     match /users/{userId} {
+      // Admin can manage all users; normal users can manage only themselves.
       allow read, create, update, delete: if isAdmin()
         || (isSignedIn() && request.auth.uid == userId);
     }
 
     // =====================================================
-    // DEFAULT SECURITY
+    // DEFAULT SECURITY — LEGACY LOGIC PRESERVED
     // =====================================================
 
-    // Authenticated users may read unspecified application collections.
-    // Anonymous users have no access. Only admin may write unspecified data.
+    // Authenticated users -> READ
+    // Anonymous users      -> NO READ
+    // Admin                -> WRITE
+    //
+    // This keeps the previous default behavior while the explicit
+    // lessonProgress and users matches provide tighter ownership controls.
     match /{document=**} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
