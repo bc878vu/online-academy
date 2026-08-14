@@ -4,6 +4,7 @@ const FIRESTORE_BASE = "https://firestore.googleapis.com/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_LOOKUP_BASE = "https://identitytoolkit.googleapis.com/v1/accounts:lookup";
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
+const IDENTITY_SCOPE = "https://www.googleapis.com/auth/identitytoolkit";
 
 function base64Url(value) {
   return Buffer.from(value)
@@ -29,13 +30,13 @@ export function getConfig() {
   return { projectId, clientEmail, privateKey, apiKey };
 }
 
-export async function getServiceAccessToken() {
+export async function getServiceAccessToken(scope = FIRESTORE_SCOPE) {
   const { clientEmail, privateKey } = getConfig();
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64Url(JSON.stringify({
     iss: clientEmail,
-    scope: FIRESTORE_SCOPE,
+    scope,
     aud: TOKEN_URL,
     iat: now,
     exp: now + 3600,
@@ -61,6 +62,10 @@ export async function getServiceAccessToken() {
   const data = await response.json();
   if (!data.access_token) throw new Error("Service token missing");
   return data.access_token;
+}
+
+export async function getIdentityAccessToken() {
+  return getServiceAccessToken(IDENTITY_SCOPE);
 }
 
 export async function verifyFirebaseIdToken(idToken) {
