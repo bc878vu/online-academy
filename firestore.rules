@@ -3,8 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function admin() { return signedIn() && request.auth.token.email == 'admin@onlineacademy.com'; }
-    function owner() { return signedIn() && request.auth.uid == request.resource.data.userId; }
-    function existingOwner() { return signedIn() && request.auth.uid == resource.data.userId; }
+    function ownerCreate() { return signedIn() && request.resource.data.userId == request.auth.uid; }
+    function ownerExisting() { return signedIn() && resource.data.userId == request.auth.uid; }
+    function ownerUpdate() { return signedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid; }
 
     match /courses/{courseId} {
       allow read: if true;
@@ -12,10 +13,10 @@ service cloud.firestore {
     }
 
     match /lessonProgress/{progressId} {
-      allow read: if existingOwner() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if owner();
-      allow update: if existingOwner() && request.resource.data.userId == resource.data.userId;
-      allow delete: if existingOwner() || admin();
+      allow read: if ownerExisting() || admin();
+      allow create: if ownerCreate();
+      allow update: if ownerUpdate();
+      allow delete: if ownerExisting() || admin();
     }
 
     match /users/{userId} {
