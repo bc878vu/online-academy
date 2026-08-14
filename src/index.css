@@ -9,8 +9,6 @@ header nav a, header nav button { -webkit-tap-highlight-color: transparent; }
 header nav a:focus-visible, header nav button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 header a, footer a, button { -webkit-tap-highlight-color: transparent; }
 
-/* Keep the shared header clean at every breakpoint. The actual responsive
-   navigation is controlled by the Tailwind classes in App.jsx. */
 @media (max-width: 1023px) {
   header nav { min-height: 68px; }
 }
@@ -20,7 +18,6 @@ header a, footer a, button { -webkit-tap-highlight-color: transparent; }
   header nav img { width: 42px; height: 42px; border-radius: 13px; }
 }
 
-/* Prevent long page titles/links from creating horizontal overflow on phones. */
 main, footer, header { max-width: 100%; overflow-x: clip; }
 
 .certificate-sheet { position: relative; }
@@ -38,17 +35,124 @@ main, footer, header { max-width: 100%; overflow-x: clip; }
 .certificate-rule { width:68px; height:1px; background:linear-gradient(90deg,transparent,#d4af37); }
 .certificate-rule:last-child { background:linear-gradient(90deg,#d4af37,transparent); }
 
+/* Premium responsive footer */
+footer {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(37,99,235,.18), transparent 30%),
+    radial-gradient(circle at 88% 18%, rgba(79,70,229,.14), transparent 28%),
+    linear-gradient(180deg, #020617 0%, #050b1d 52%, #020617 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 -18px 50px rgba(15,23,42,.06);
+}
+footer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .22;
+  background-image: radial-gradient(rgba(255,255,255,.24) .7px, transparent .7px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+footer > div { position: relative; }
+
+/* CTA glass panel */
+footer > div > div:first-child {
+  position: relative;
+  border-color: rgba(96,165,250,.20) !important;
+  background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(15,23,42,.30) 52%, rgba(79,70,229,.15)) !important;
+  box-shadow: 0 24px 70px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.08) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+footer > div > div:first-child::after {
+  content: "";
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  right: -55px;
+  top: -85px;
+  border-radius: 999px;
+  background: rgba(59,130,246,.14);
+  filter: blur(2px);
+  pointer-events: none;
+}
+footer > div > div:first-child a {
+  position: relative;
+  z-index: 1;
+  min-height: 46px;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(37,99,235,.22);
+}
+
+/* Brand panel + navigation columns */
+footer > div > div:nth-child(2) > div { min-width: 0; }
+footer > div > div:nth-child(2) > div:first-child {
+  border-color: rgba(255,255,255,.09) !important;
+  background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.018)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+footer > div > div:nth-child(2) > div:not(:first-child) { padding: 4px 2px; }
+footer > div > div:nth-child(2) > div:not(:first-child) > p { display:flex; align-items:center; gap:8px; }
+footer > div > div:nth-child(2) > div:not(:first-child) > p::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #60a5fa, #4f46e5);
+}
+footer > div > div:nth-child(2) a,
+footer > div > div:nth-child(2) button { color:#94a3b8; border-radius:9px; }
+footer > div > div:nth-child(2) a:hover,
+footer > div > div:nth-child(2) button:hover { color:#fff; transform:translateX(3px); }
+
+/* Bottom product bar */
+footer > div > div:last-child { border-top-color:rgba(255,255,255,.08) !important; color:#64748b; }
+footer > div > div:last-child a { color:#64748b; }
+footer > div > div:last-child a:hover { color:#bfdbfe; }
+
+@media (min-width:1024px) {
+  footer > div { padding-top:56px !important; padding-bottom:30px !important; }
+  footer > div > div:first-child { padding:26px 30px !important; }
+  footer > div > div:nth-child(2) { gap:34px !important; }
+}
+
+@media (max-width:767px) {
+  footer { margin-top:0; }
+  footer > div { padding:30px 16px 20px !important; }
+  footer > div > div:first-child { margin-bottom:28px !important; border-radius:22px !important; padding:20px !important; }
+  footer > div > div:first-child > div:first-child { gap:12px; }
+  footer > div > div:first-child p:first-child { font-size:16px; }
+  footer > div > div:first-child p:last-child { font-size:13px; line-height:1.55; }
+  footer > div > div:first-child a { width:100%; margin-top:16px !important; }
+  footer > div > div:nth-child(2) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:26px 22px !important; }
+  footer > div > div:nth-child(2) > div:first-child { grid-column:1/-1; border-radius:20px; padding:18px !important; }
+  footer > div > div:nth-child(2) > div:not(:first-child) { padding:0; }
+  footer > div > div:nth-child(2) > div:not(:first-child) > p { margin-bottom:12px; }
+  footer > div > div:nth-child(2) a, footer > div > div:nth-child(2) button { font-size:13px; }
+  footer > div > div:last-child { margin-top:26px !important; padding-top:16px !important; gap:10px !important; }
+  footer > div > div:last-child > div { gap:14px 18px !important; }
+}
+
+@media (max-width:420px) {
+  footer > div > div:nth-child(2) { grid-template-columns:1fr !important; }
+  footer > div > div:nth-child(2) > div:first-child { grid-column:auto; }
+  footer > div > div:first-child { padding:18px !important; }
+}
+
 @media print {
   @page { size: landscape; margin: 0; }
-  html, body { width: 100% !important; height: 100% !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; overflow: hidden !important; }
-  header, footer, nav, .print\\:hidden { display: none !important; }
-  .certificate-print-root { display: block !important; width: 100vw !important; height: 100vh !important; min-height: 0 !important; margin: 0 !important; padding: 3.5vh 3.5vw !important; background: #fff !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  .certificate-print-root > div { width: 100% !important; height: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
-  .certificate-sheet { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; border: 0 !important; box-shadow: none !important; overflow: hidden !important; page-break-inside: avoid !important; break-inside: avoid !important; }
-  .certificate-sheet-inner { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 4.5% 5.5% !important; border: 1px solid #d8e1ef !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden !important; page-break-inside: avoid !important; break-inside: avoid !important; }
-  .certificate-header-mark { width: clamp(42px, 5vw, 54px) !important; height: clamp(42px, 5vw, 54px) !important; }
-  .certificate-watermark { font-size: clamp(110px, 15vw, 170px) !important; }
-  .certificate-signatures { margin-top: 2.5% !important; }
-  .certificate-verified { margin-top: 1.5% !important; }
-  .certificate-verification { margin-top: .6% !important; }
+  html, body { width:100% !important; height:100% !important; min-width:0 !important; margin:0 !important; padding:0 !important; background:#fff !important; overflow:hidden !important; }
+  header, footer, nav, .print\\:hidden { display:none !important; }
+  .certificate-print-root { display:block !important; width:100vw !important; height:100vh !important; min-height:0 !important; margin:0 !important; padding:3.5vh 3.5vw !important; background:#fff !important; overflow:hidden !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  .certificate-print-root > div { width:100% !important; height:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+  .certificate-sheet { width:100% !important; height:100% !important; min-height:0 !important; margin:0 !important; padding:0 !important; border-radius:0 !important; border:0 !important; box-shadow:none !important; overflow:hidden !important; page-break-inside:avoid !important; break-inside:avoid !important; }
+  .certificate-sheet-inner { width:100% !important; height:100% !important; min-height:0 !important; margin:0 !important; padding:4.5% 5.5% !important; border:1px solid #d8e1ef !important; border-radius:0 !important; box-shadow:none !important; overflow:hidden !important; page-break-inside:avoid !important; break-inside:avoid !important; }
+  .certificate-header-mark { width:clamp(42px,5vw,54px) !important; height:clamp(42px,5vw,54px) !important; }
+  .certificate-watermark { font-size:clamp(110px,15vw,170px) !important; }
+  .certificate-signatures { margin-top:2.5% !important; }
+  .certificate-verified { margin-top:1.5% !important; }
+  .certificate-verification { margin-top:.6% !important; }
 }
