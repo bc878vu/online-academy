@@ -1,6 +1,7 @@
 import { getConfig, getIdentityAccessToken, verifyFirebaseIdToken } from "./_firebase.js";
 
 const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
+const IDENTITY_PROJECT_URL = "https://identitytoolkit.googleapis.com/v1/projects";
 const UPDATE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:update";
 const RESEND_URL = "https://api.resend.com/emails";
 
@@ -52,6 +53,36 @@ async function generateVerificationCode(email) {
   const data = await response.json();
   if (!data.oobCode) throw new Error("Firebase did not return a verification code");
   return data.oobCode;
+}
+
+async function sendFirebaseVerificationEmailServer(email, idToken, appUrl) {
+  const { projectId } = getConfig();
+  const accessToken = await getIdentityAccessToken();
+  const response = await fetch(`${IDENTITY_PROJECT_URL}/${encodeURIComponent(projectId)}/accounts:sendOobCode`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      requestType: "VERIFY_EMAIL",
+      email,
+      idToken,
+      continueUrl: `${appUrl}/verify-email?verified=1`,
+      canHandleCodeInApp: false,
+      clientType: "CLIENT_TYPE_WEB",
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const error = new Error(`Firebase verification email fallback failed (${response.status}): ${detail.slice(0, 350)}`);
+    error.status = response.status;
+    error.providerDetail = detail;
+    throw error;
+  }
+
+  return response.json();
 }
 
 async function completeVerification(oobCode) {
@@ -152,15 +183,14 @@ export default async function handler(req, res) {
     } catch (error) {
       if (!isResendDomainRestriction(error)) throw error;
 
-      // Resend cannot deliver to arbitrary recipients while the account is in
-      // testing mode. The browser must use Firebase's built-in sender instead.
-      // This is intentional: the Vercel server cannot call Firebase Auth with
-      // a browser-restricted API key.
+      // Resend is still in testing mode. Use the official Identity Platform
+      // OAuth endpoint for the temporary fallback instead of calling the
+      // browser-restricted Firebase Web API key from Vercel.
+      await sendFirebaseVerificationEmailServer(user.email, idToken, appUrl);
       return json(res, 200, {
         ok: true,
-        fallback: "firebase-client",
-        message: "Verification is ready. Firebase will send the verification email while the custom sending domain is pending.",
-        delivery: "firebase-client-fallback",
+        message: "Verification email sent. Your custom Online Academy email will be used after the Resend domain is verified.",
+        delivery: "firebase-fallback",
       });
     }
   } catch (error) {
