@@ -90,17 +90,25 @@ function loadYouTubeAPI() {
   youtubeApiPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
     const previous = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
+    const ready = () => {
       try { previous?.(); } catch {}
-      if (window.YT?.Player) resolve(window.YT); else reject(new Error("YouTube API unavailable"));
+      if (window.YT?.Player) resolve(window.YT);
+      else reject(new Error("YouTube API unavailable"));
     };
+    window.onYouTubeIframeAPIReady = ready;
     if (!existing) {
       const script = document.createElement("script");
       script.src = "https://www.youtube.com/iframe_api";
       script.async = true;
-      script.onerror = () => reject(new Error("YouTube API script failed"));
+      script.onload = () => { if (window.YT?.Player) ready(); };
+      script.onerror = () => { youtubeApiPromise = null; reject(new Error("YouTube API script failed")); };
       document.head.appendChild(script);
-    } else if (window.YT?.Player) resolve(window.YT);
+    } else if (window.YT?.Player) {
+      resolve(window.YT);
+    }
+  }).catch((error) => {
+    youtubeApiPromise = null;
+    throw error;
   });
   return youtubeApiPromise;
 }
@@ -124,7 +132,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
 
   const wrapRef = useRef(null);
   const videoRef = useRef(null);
-  const ytIframeRef = useRef(null);
+  const youtubeContainerRef = useRef(null);
   const ytPlayerRef = useRef(null);
   const hideTimerRef = useRef(null);
   const tickRef = useRef(null);
@@ -242,7 +250,8 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
     return () => document.removeEventListener("fullscreenchange", onFullscreen);
   }, []);
 
-  // Fix the YouTube origin mismatch by creating the iframe first with the current page origin.
+  // Use a DIV container and let the YouTube IFrame API create the iframe itself.
+  // This avoids the intermittent iframe/API race that left the lesson stuck on Loading video.
   useEffect(() => {
     if (source.type !== "youtube") {
       try { ytPlayerRef.current?.destroy?.(); } catch {}
@@ -260,11 +269,25 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
     const init = async () => {
       try {
         const YT = await loadYouTubeAPI();
-        if (cancelled || !ytIframeRef.current) return;
+        if (cancelled || !youtubeContainerRef.current) return;
         try { ytPlayerRef.current?.destroy?.(); } catch {}
         ytPlayerRef.current = null;
+        youtubeContainerRef.current.innerHTML = "";
 
-        const player = new YT.Player(ytIframeRef.current, {
+        const player = new YT.Player(youtubeContainerRef.current, {
+          width: "100%",
+          height: "100%",
+          videoId: source.videoId,
+          playerVars: {
+            enablejsapi: 1,
+            origin: window.location.origin,
+            playsinline: 1,
+            controls: 0,
+            rel: 0,
+            autoplay: 0,
+            fs: 0,
+            modestbranding: 1,
+          },
           events: {
             onReady: (event) => {
               if (cancelled) return;
@@ -282,15 +305,25 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
             },
             onStateChange: (event) => {
               if (cancelled) return;
-              const isPlaying = event.data === YT.PlayerState.PLAYING;
-              setPlaying(isPlaying);
-              if (isPlaying) { lastTickRef.current = Date.now(); setError(""); }
-              else { flushActiveTime(); persist(true); }
-              if (event.data === YT.PlayerState.ENDED) { flushActiveTime(); persist(true); }
+              if (event.data === YT.PlayerState.PLAYING) {
+                setPlaying(true);
+                lastTickRef.current = Date.now();
+                setError("");
+              } else if (event.data === YT.PlayerState.PAUSED) {
+                flushActiveTime();
+                setPlaying(false);
+                persist(true);
+              } else if (event.data === YT.PlayerState.ENDED) {
+                flushActiveTime();
+                setPlaying(false);
+                persist(true);
+              }
             },
             onError: (event) => {
               const code = Number(event?.data);
               let message = "This lesson video could not be loaded. Check the video URL.";
+              if (code === 2) message = "The YouTube video URL is invalid.";
+              if (code === 5) message = "YouTube could not play this video in the current player.";
               if (code === 100) message = "This YouTube video was not found or is private.";
               if (code === 101 || code === 150) message = "This YouTube video does not allow embedding. Ask the admin to use an embeddable video.";
               if (code === 153) message = "YouTube could not verify the website origin. Please refresh the page and try again.";
@@ -305,7 +338,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
             setPlayerReady(false);
             setError("Video is taking too long to load. Check the YouTube URL or embedding permission.");
           }
-        }, 12000);
+        }, 15000);
       } catch (e) {
         console.error("YouTube player initialization error:", e);
         if (!cancelled) { setPlayerReady(false); setError("YouTube player could not be initialized. Please refresh the lesson."); }
@@ -317,6 +350,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
       if (timeoutId) clearTimeout(timeoutId);
       try { ytPlayerRef.current?.destroy?.(); } catch {}
       ytPlayerRef.current = null;
+      if (youtubeContainerRef.current) youtubeContainerRef.current.innerHTML = "";
       setPlayerReady(false);
     };
   }, [courseId, flushActiveTime, initialProgress?.positionSeconds, lesson?.id, persist, source.type, source.videoId, user?.uid]);
@@ -390,30 +424,30 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
 
   return <section ref={wrapRef} className={`overflow-hidden bg-slate-950 shadow-2xl ${fullscreen ? "flex h-screen flex-col rounded-none" : "rounded-2xl sm:rounded-3xl"}`} onMouseMove={activity} onTouchStart={activity}>
     <div className={`relative w-full overflow-hidden bg-black ${fullscreen ? "min-h-0 flex-1" : "aspect-video min-h-0"}`}>
-      {source.type === "youtube" && <iframe ref={ytIframeRef} title={lesson?.title || "YouTube lesson video"} className="absolute inset-0 z-0 h-full w-full border-0" src={`https://www.youtube-nocookie.com/embed/${source.videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&controls=0&rel=0&autoplay=0&fs=0`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />}
+      {source.type === "youtube" && <div ref={youtubeContainerRef} className="absolute inset-0 z-0 h-full w-full bg-black" aria-label="YouTube lesson video" />}
       {source.type === "html5" && <video ref={videoRef} src={source.url} poster={thumbnail || undefined} className="absolute inset-0 z-0 h-full w-full bg-black object-contain" playsInline preload="metadata" onLoadedMetadata={(event) => { const d = Number(event.currentTarget.duration) || 0; stateRef.current.duration = d; setDuration(d); const local = user ? readLocalProgress(user.uid, courseId, lesson.id) : null; const p = Number(initialProgress?.positionSeconds) || Number(local?.positionSeconds) || 0; if (p > 0 && p < d) event.currentTarget.currentTime = p; event.currentTarget.volume = volume / 100; event.currentTarget.muted = muted; setPlayerReady(true); }} onTimeUpdate={(event) => { const t = Number(event.currentTarget.currentTime) || 0; stateRef.current.current = t; setCurrentTime(t); }} onPlay={() => { setPlaying(true); setPlayerReady(true); lastTickRef.current = Date.now(); }} onPause={() => { flushActiveTime(); setPlaying(false); persist(true); }} onEnded={() => { flushActiveTime(); setPlaying(false); persist(true); }} onError={() => { setPlayerReady(false); setError("This video file could not be loaded. Check that the URL is a direct browser-playable video file."); }}>
         {lesson?.captionsUrl && isSafeUrl(lesson.captionsUrl) && <track kind="captions" src={lesson.captionsUrl} default />}
       </video>}
       {source.type === "none" && <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-white"><PlayCircle size={50} className="text-slate-500" /><p className="mt-3 font-bold">No lesson video available</p><p className="mt-1 text-xs text-slate-400">Ask the admin to add a video URL.</p></div>}
       {source.type === "invalid" && <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-white">Invalid lesson video URL.</div>}
       {source.type !== "none" && source.type !== "invalid" && <button type="button" aria-label={showControls ? (playing ? "Pause lesson" : "Play lesson") : "Show video controls"} onClick={handleSurfaceClick} onTouchStart={activity} className="absolute inset-0 z-10 cursor-pointer bg-transparent focus:outline-none" />}
-      {!playerReady && source.type !== "none" && source.type !== "invalid" && !error && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"><div className="rounded-full bg-black/55 px-4 py-3 text-xs font-bold text-white shadow-lg"><Loader2 className="mr-2 inline animate-spin" size={15}/> Loading video…</div></div>}
+      {!playerReady && source.type !== "none" && source.type !== "invalid" && !error && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"><div className="rounded-full bg-black/60 px-4 py-3 text-xs font-bold text-white shadow-lg"><Loader2 className="mr-2 inline animate-spin" size={15}/> Loading video…</div></div>}
       {error && <div className="absolute left-2 right-2 top-2 z-50 rounded-xl border border-amber-300/30 bg-amber-950/95 px-3 py-2.5 text-[11px] font-semibold leading-4 text-amber-50 shadow-xl sm:left-4 sm:right-4 sm:top-4 sm:px-4 sm:py-3 sm:text-xs"><span className="font-black">Warning:</span> {error}</div>}
-      {source.type !== "none" && source.type !== "invalid" && <div className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-2 pt-14 transition-all duration-300 sm:px-4 sm:pb-4 sm:pt-20 ${showControls ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`} onClick={(event) => event.stopPropagation()} onMouseMove={(event) => { event.stopPropagation(); activity(); }} onTouchStart={(event) => { event.stopPropagation(); activity(); }}>
+      {source.type !== "none" && source.type !== "invalid" && <div className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-2 pb-2 pt-12 transition-all duration-300 sm:px-4 sm:pb-4 sm:pt-20 ${showControls ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`} onClick={(event) => event.stopPropagation()} onMouseMove={(event) => { event.stopPropagation(); activity(); }} onTouchStart={(event) => { event.stopPropagation(); activity(); }}>
         <input type="range" min="0" max="100" step="0.1" value={duration ? Math.min(100, (currentTime / duration) * 100) : 0} onChange={(event) => seekTo((Number(event.target.value) / 100) * duration)} className="mb-2 h-1.5 w-full cursor-pointer accent-blue-500 sm:mb-3" aria-label="Video position" />
-        <div className="flex flex-wrap items-center gap-2 text-white">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+        <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1.5 overflow-x-auto text-white sm:gap-2">
+          <div className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2">
             <button type="button" onClick={handleSurfaceClick} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={17} /> : <Play size={17} />}</button>
             <button type="button" onClick={() => seekBy(-10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Back 10 seconds"><RotateCcw size={17} /></button>
             <button type="button" onClick={() => seekBy(10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Forward 10 seconds"><RotateCw size={17} /></button>
-            <span className="ml-1 min-w-[72px] text-[11px] font-bold tabular-nums text-slate-200 sm:min-w-[84px] sm:text-xs">{formatTime(currentTime)} / {formatTime(duration)}</span>
+            <span className="ml-0 min-w-[66px] shrink-0 text-[10px] font-bold tabular-nums text-slate-200 xs:min-w-[72px] sm:ml-1 sm:min-w-[84px] sm:text-xs">{formatTime(currentTime)} / {formatTime(duration)}</span>
             <span className="hidden rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-black text-emerald-300 md:inline-flex">Active {percent}%</span>
           </div>
-          <div className="flex w-full items-center justify-end gap-1.5 sm:ml-auto sm:w-auto">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button type="button" onClick={toggleMute} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={muted ? "Unmute" : "Mute"}>{muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
-            <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="w-14 shrink-0 accent-blue-500 sm:w-16 lg:w-20" />
-            <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 rounded-lg border border-white/10 bg-white/10 px-2 text-xs font-bold text-white outline-none"><option value="0.75" className="text-slate-900">0.75x</option><option value="1" className="text-slate-900">1x</option><option value="1.25" className="text-slate-900">1.25x</option><option value="1.5" className="text-slate-900">1.5x</option><option value="1.75" className="text-slate-900">1.75x</option><option value="2" className="text-slate-900">2x</option></select>
-            {source.type === "html5" && <button type="button" onClick={togglePip} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
+            <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="hidden w-16 shrink-0 accent-blue-500 sm:block lg:w-20" />
+            <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 w-[52px] shrink-0 rounded-lg border border-white/10 bg-white/10 px-1 text-center text-[11px] font-bold text-white outline-none sm:w-[58px] sm:text-xs"><option value="0.75" className="text-slate-900">0.75x</option><option value="1" className="text-slate-900">1x</option><option value="1.25" className="text-slate-900">1.25x</option><option value="1.5" className="text-slate-900">1.5x</option><option value="1.75" className="text-slate-900">1.75x</option><option value="2" className="text-slate-900">2x</option></select>
+            {source.type === "html5" && <button type="button" onClick={togglePip} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 sm:flex" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
             <button type="button" onClick={toggleFullscreen} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
           </div>
         </div>
