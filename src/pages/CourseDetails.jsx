@@ -184,6 +184,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
   const [saving, setSaving] = useState(false);
   const [syncState, setSyncState] = useState("idle");
   const [error, setError] = useState("");
+  const [attendanceReady, setAttendanceReady] = useState(initialProgress?.completed === true || requiredPercent === 0);
 
   const wrapRef = useRef(null);
   const videoRef = useRef(null);
@@ -225,6 +226,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
 
     completedRef.current = completed;
     stateRef.current.completed = completed;
+    setAttendanceReady(completed);
 
     const payload = {
       userId: user.uid,
@@ -347,6 +349,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
       completed: base.completed === true,
     };
     completedRef.current = base.completed === true;
+    setAttendanceReady(base.completed === true || requiredPercent === 0);
     setDuration(stateRef.current.duration);
     setCurrentTime(stateRef.current.current);
     setEarnedSeconds(stateRef.current.earned);
@@ -535,7 +538,6 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
       if (timeoutId) clearTimeout(timeoutId);
       try { ytPlayerRef.current?.destroy?.(); } catch {}
       ytPlayerRef.current = null;
-      setPlayerReady(false);
     };
   }, [source.type, source.videoId]);
 
@@ -644,7 +646,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
   }, [handleSurfaceClick, seekBy]);
 
   const percent = duration > 0 ? Math.min(100, Math.floor((earnedSeconds / duration) * 100)) : 0;
-  const attendanceReady = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;
+  const attendanceThresholdReached = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;
   const thumbnail = lesson?.thumbnailUrl || (source.type === "youtube" ? `https://i.ytimg.com/vi/${source.videoId}/hqdefault.jpg` : "");
 
   return (
@@ -660,9 +662,8 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
             ref={ytIframeRef}
             title={lesson?.title || "YouTube lesson video"}
             className="absolute inset-0 z-0 h-full w-full border-0"
-            src={`https://www.youtube-nocookie.com/embed/${source.videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&controls=0&rel=0&fs=0&autoplay=0`}
+            src={`https://www.youtube.com/embed/${source.videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&controls=0&rel=0&fs=0&autoplay=0`}
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
@@ -750,7 +751,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
           />
         )}
 
-        {((!playerReady && !playing) || (buffering && !playing)) && source.type !== "none" && source.type !== "invalid" && !error && (
+        {source.type === "html5" && !playerReady && !error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div className="flex items-center gap-2 rounded-xl bg-slate-900/90 px-4 py-3 text-xs font-bold text-white shadow-xl">
               <Loader2 className="animate-spin" size={16} />
@@ -849,6 +850,7 @@ export default function CourseDetails() {
   const [user, setUser] = useState(undefined);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
+  const [attendanceReady, setAttendanceReady] = useState(initialProgress?.completed === true || requiredPercent === 0);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [progressMap, setProgressMap] = useState({});
   const [search, setSearch] = useState("");
