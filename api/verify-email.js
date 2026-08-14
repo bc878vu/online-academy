@@ -1,7 +1,7 @@
 import { getConfig, getIdentityAccessToken, verifyFirebaseIdToken } from "./_firebase.js";
 
-const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
 const IDENTITY_PROJECT_URL = "https://identitytoolkit.googleapis.com/v1/projects";
+const IDENTITY_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode";
 const UPDATE_URL = "https://identitytoolkit.googleapis.com/v1/accounts:update";
 const RESEND_URL = "https://api.resend.com/emails";
 
@@ -28,10 +28,9 @@ function getAppUrl() {
 }
 
 async function generateVerificationCode(email) {
-  const { projectId, apiKey } = getConfig();
-  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
+  const { projectId } = getConfig();
   const accessToken = await getIdentityAccessToken();
-  const response = await fetch(`${IDENTITY_URL}?key=${encodeURIComponent(apiKey)}`, {
+  const response = await fetch(`${IDENTITY_PROJECT_URL}/${encodeURIComponent(projectId)}/accounts:sendOobCode`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -41,13 +40,15 @@ async function generateVerificationCode(email) {
       requestType: "VERIFY_EMAIL",
       email,
       returnOobLink: true,
-      targetProjectId: projectId,
+      clientType: "CLIENT_TYPE_WEB",
     }),
   });
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Firebase verification link generation failed (${response.status}): ${detail.slice(0, 350)}`);
+    const error = new Error(`Firebase verification link generation failed (${response.status}): ${detail.slice(0, 350)}`);
+    error.status = response.status;
+    throw error;
   }
 
   const data = await response.json();
@@ -184,8 +185,8 @@ export default async function handler(req, res) {
       if (!isResendDomainRestriction(error)) throw error;
 
       // Resend is still in testing mode. Use the official Identity Platform
-      // OAuth endpoint for the temporary fallback instead of calling the
-      // browser-restricted Firebase Web API key from Vercel.
+      // OAuth endpoint for the temporary fallback instead of the browser-
+      // restricted Firebase Web API key from the Vercel server.
       await sendFirebaseVerificationEmailServer(user.email, idToken, appUrl);
       return json(res, 200, {
         ok: true,
