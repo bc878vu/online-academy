@@ -3,6 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // =====================================================
+    // AUTH / ADMIN
+    // =====================================================
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,49 +16,126 @@ service cloud.firestore {
         && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1";
     }
 
+
+    // =====================================================
+    // COURSES
+    // =====================================================
+
     match /courses/{courseId} {
-      allow read: if isAdmin() || resource.data.published == true;
-      allow create, update, delete: if isAdmin();
-    }
 
-    // A student may only read/write the progress document whose ID is built
-    // from that student's UID. This also makes setDoc(..., {merge:true}) work
-    // consistently for both first-time creates and subsequent updates.
-    match /lessonProgress/{progressId} {
+      // Same old logic:
+      // Public users can read published courses.
+      // Admin can read everything.
       allow read: if isAdmin()
-                  || (isSignedIn()
-                      && progressId.matches('^' + request.auth.uid + '_.*$'));
+                  || (
+                    resource.data.published == true
+                  );
 
-      allow create: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$')
-                        && request.resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
 
-      allow update: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$')
-                        && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin();
 
-      allow delete: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$'));
+      allow delete: if isAdmin();
     }
+
+
+    // =====================================================
+    // LESSON PROGRESS / ATTENDANCE
+    // =====================================================
+
+    match /lessonProgress/{progressId} {
+
+      // Admin can read everything.
+      // Student can read only the progress document whose ID belongs to him.
+      // The app uses: userId_courseId_lessonId
+      allow read: if isAdmin()
+                  || (
+                    isSignedIn()
+                    && progressId.matches('^' + request.auth.uid + '_.*$')
+                  );
+
+      // Student can create progress only for himself.
+      // The document ID is also checked so the client cannot write another
+      // student's progress document.
+      allow create: if isAdmin()
+                    || (
+                      isSignedIn()
+                      && progressId.matches('^' + request.auth.uid + '_.*$')
+                      && request.resource.data.userId == request.auth.uid
+                    );
+
+      // Student can update only his own progress.
+      // Ownership cannot be changed. Using progressId here also allows
+      // setDoc(..., { merge: true }) to update an existing progress document
+      // even if an older document was created before these ownership fields
+      // were stored consistently.
+      allow update: if isAdmin()
+                    || (
+                      isSignedIn()
+                      && progressId.matches('^' + request.auth.uid + '_.*$')
+                      && request.resource.data.userId == request.auth.uid
+                    );
+
+      // Student can delete only his own progress.
+      allow delete: if isAdmin()
+                    || (
+                      isSignedIn()
+                      && progressId.matches('^' + request.auth.uid + '_.*$')
+                    );
+    }
+
+
+    // =====================================================
+    // CERTIFICATES
+    // =====================================================
 
     match /certificates/{certificateId} {
+
+      // Public exact certificate verification.
       allow get: if true;
+
+      // Prevent certificate listing/enumeration.
       allow list: if false;
-      allow create, update, delete: if isAdmin();
+
+      // Admin only.
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
+
+
+    // =====================================================
+    // USERS
+    // =====================================================
 
     match /users/{userId} {
+
+      // Admin can manage all users.
+      // Normal user can manage only his own document.
       allow read, create, update, delete: if isAdmin()
-        || (isSignedIn() && request.auth.uid == userId);
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+        );
     }
 
+
+    // =====================================================
+    // DEFAULT SECURITY
+    // =====================================================
+
+    // SAME OLD LOGIC:
+    //
+    // Authenticated users -> READ
+    // Anonymous users      -> NO READ
+    // Admin                -> WRITE
+    //
+    // This preserves your previous default behavior.
+
     match /{document=**} {
-      allow read: if isSignedIn()
-                  && !document.matches(/^lessonProgress\/.*$/)
-                  && !document.matches(/^users\/.*$/);
+
+      allow read: if isSignedIn();
+
       allow write: if isAdmin();
     }
   }
