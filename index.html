@@ -167,32 +167,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      /* YouTube embed hygiene: set the documented referrer metadata before the IFrame API initializes. */
-      (() => {
-        const applyYouTubeEmbedParams = (node) => {
-          if (!(node instanceof HTMLIFrameElement)) return;
-          try {
-            const url = new URL(node.src || "", window.location.href);
-            if (!/(^|\\.)youtube(?:-nocookie)?\\.com$/.test(url.hostname)) return;
-            if (!url.searchParams.has("origin")) url.searchParams.set("origin", window.location.origin);
-            if (!url.searchParams.has("widget_referrer")) url.searchParams.set("widget_referrer", window.location.href);
-            node.src = url.toString();
-            node.loading = "eager";
-          } catch {}
-        };
-        document.querySelectorAll("iframe").forEach(applyYouTubeEmbedParams);
-        new MutationObserver((records) => {
-          for (const record of records) {
-            record.addedNodes.forEach((node) => {
-              if (node.nodeType !== 1) return;
-              applyYouTubeEmbedParams(node);
-              node.querySelectorAll?.("iframe").forEach(applyYouTubeEmbedParams);
-            });
-          }
-        }).observe(document.documentElement, { childList: true, subtree: true });
-      })();
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
