@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 const FIRESTORE_BASE = "https://firestore.googleapis.com/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const AUTH_LOOKUP_BASE = "https://identitytoolkit.googleapis.com/v1/accounts:lookup";
+const IDENTITY_BASE = "https://identitytoolkit.googleapis.com/v1/projects";
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 const IDENTITY_SCOPE = "https://www.googleapis.com/auth/identitytoolkit";
 
@@ -68,15 +68,27 @@ export async function getIdentityAccessToken() {
   return getServiceAccessToken(IDENTITY_SCOPE);
 }
 
+// Server-side Firebase Auth calls must not depend on the browser Web API key.
+// The Web API key may be restricted by HTTP referrer for the public app, while
+// Vercel server functions do not send that browser referrer. Identity Platform
+// explicitly supports OAuth-authenticated project account lookup for admins.
 export async function verifyFirebaseIdToken(idToken) {
-  const { apiKey } = getConfig();
-  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY");
-  const response = await fetch(`${AUTH_LOOKUP_BASE}?key=${encodeURIComponent(apiKey)}`, {
+  const { projectId } = getConfig();
+  const accessToken = await getIdentityAccessToken();
+  const response = await fetch(`${IDENTITY_BASE}/${encodeURIComponent(projectId)}/accounts:lookup`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ idToken }),
   });
-  if (!response.ok) throw new Error("Invalid Firebase ID token");
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const error = new Error(`Invalid Firebase ID token (${response.status}): ${detail.slice(0, 250)}`);
+    error.status = 401;
+    throw error;
+  }
   const data = await response.json();
   const user = data.users?.[0];
   if (!user?.localId || user.disabled === true) throw new Error("Authenticated user is unavailable");
