@@ -47,7 +47,9 @@ export async function listAuthUsers() {
       throw new Error(`Identity Toolkit user query failed (${response.status}): ${detail.slice(0, 300)}`);
     }
     const data = await response.json();
-    const batch = Array.isArray(data.users) ? data.users : [];
+    // queryAccounts returns QueryUserInfoResponse.userInfo (JSON camelCase),
+    // not the Admin SDK listUsers() shape of `users`.
+    const batch = Array.isArray(data.userInfo) ? data.userInfo : [];
     users.push(...batch);
     if (batch.length < pageSize) break;
   }
