@@ -340,6 +340,15 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
 
   const lessonKey = `${courseId}:${lesson?.id || ""}:${user?.uid || ""}`;
 
+  // Sync a completed attendance result arriving from Firestore without resetting the player.
+  useEffect(() => {
+    if (initialProgress?.completed === true) {
+      completedRef.current = true;
+      stateRef.current.completed = true;
+      setAttendanceReady(true);
+    }
+  }, [initialProgress?.completed]);
+
   useEffect(() => {
     const base = initialProgress || (user ? readLocalProgress(user.uid, courseId, lesson?.id) : null) || {};
     stateRef.current = {
