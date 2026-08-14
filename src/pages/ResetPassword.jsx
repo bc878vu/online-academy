@@ -14,14 +14,22 @@ import {
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { auth } from "../firebase";
 
+const SUCCESS_PARAM = "resetSuccess";
+
 function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const resetCompleted = searchParams.get(SUCCESS_PARAM) === "1";
 
   // Firebase custom email action handlers normally receive the code directly
   // as ?oobCode=. We also support a nested continueUrl so older/generated
   // action links can still reach the same reset screen.
   const actionData = useMemo(() => {
+    if (resetCompleted) {
+      return { oobCode: "", mode: "resetPassword" };
+    }
+
     const directCode = searchParams.get("oobCode") || "";
     const directMode = searchParams.get("mode") || "";
     const continueUrl = searchParams.get("continueUrl") || "";
@@ -43,12 +51,12 @@ function ResetPassword() {
     }
 
     return { oobCode: "", mode: directMode };
-  }, [searchParams]);
+  }, [searchParams, resetCompleted]);
 
   const oobCode = actionData.oobCode;
   const actionMode = actionData.mode;
 
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(!resetCompleted);
   const [validCode, setValidCode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,9 +65,16 @@ function ResetPassword() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState(resetCompleted);
 
   useEffect(() => {
+    if (resetCompleted) {
+      setChecking(false);
+      setSuccess(true);
+      setValidCode(false);
+      return undefined;
+    }
+
     let active = true;
 
     const validateCode = async () => {
@@ -121,7 +136,7 @@ function ResetPassword() {
     return () => {
       active = false;
     };
-  }, [actionMode, oobCode]);
+  }, [actionMode, oobCode, resetCompleted]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -163,6 +178,11 @@ function ResetPassword() {
       // Firebase consumes the action code here. A successful confirmation
       // invalidates this reset code, so the same email link cannot be reused.
       await confirmPasswordReset(auth, oobCode, password);
+
+      // Remove the one-time oobCode from the browser URL immediately. This
+      // prevents a refresh/back navigation from showing an invalid-link error
+      // after a successful password change.
+      navigate(`/reset-password?${SUCCESS_PARAM}=1`, { replace: true });
       setSuccess(true);
       setValidCode(false);
       setPassword("");
@@ -173,7 +193,7 @@ function ResetPassword() {
       switch (firebaseError?.code) {
         case "auth/expired-action-code":
           setError(
-            "This password reset link has expired. Please request a new one."
+            "This password reset link has expired. Please request a new reset link."
           );
           setValidCode(false);
           break;
@@ -227,19 +247,18 @@ function ResetPassword() {
                 <CheckCircle size={34} />
               </div>
               <h1 className="mt-5 text-2xl font-bold text-slate-900">
-                Password Updated
+                New Password Set
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Your password has been changed successfully. The reset link is
-                now invalid and cannot be used again. You can sign in with your
-                new password.
+                Your new password has been set successfully. You can now sign in
+                to your Online Academy account with your new password.
               </p>
               <button
                 type="button"
                 onClick={() => navigate("/login", { replace: true })}
                 className="mt-7 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white shadow-md shadow-blue-600/15 transition hover:bg-blue-700"
               >
-                Go to Login
+                Continue to Login
               </button>
             </div>
           ) : (
