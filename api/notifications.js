@@ -1,4 +1,5 @@
 import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
+import { listAuthUsers } from "./_identity.js";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const RESEND_URL = "https://api.resend.com/emails/batch";
@@ -12,12 +13,7 @@ function json(res, status, body) {
 }
 
 function escapeHtml(value = "") {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function getFromAddress() {
@@ -35,18 +31,17 @@ function getAppUrl(req) {
 }
 
 async function getRecipients(audience) {
-  const users = await firestoreQuery("users");
-  const normalized = users.map((row) => ({
-    id: row.name?.split("/").pop() || "",
-    email: String(row.fields?.email || row.fields?.userEmail || row.fields?.authEmail || "").trim().toLowerCase(),
-    name: String(row.fields?.displayName || row.fields?.name || "Student").trim(),
-  })).filter((user) => user.email && user.email.includes("@"));
+  const authUsers = await listAuthUsers();
+  const normalized = authUsers.map((user) => ({
+    id: String(user.localId || ""),
+    email: String(user.email || "").trim().toLowerCase(),
+    name: String(user.displayName || "Student").trim(),
+  })).filter((user) => user.id && user.email && user.email.includes("@") && user.id !== ADMIN_UID);
 
   if (audience === "all") return normalized;
 
   const paidOrders = await firestoreQuery("orders", [{ field: "status", value: "paid" }]);
   const paidIds = new Set(paidOrders.map((row) => String(row.fields?.userId || "")).filter(Boolean));
-
   if (audience === "paid") return normalized.filter((user) => paidIds.has(user.id));
   if (audience === "free") return normalized.filter((user) => !paidIds.has(user.id));
   throw new Error("Invalid audience");
@@ -60,23 +55,12 @@ async function sendBatch(recipients, subject, html, idempotencyPrefix) {
 
   for (let index = 0; index < recipients.length; index += MAX_BATCH) {
     const chunk = recipients.slice(index, index + MAX_BATCH);
-    const payload = chunk.map((recipient) => ({
-      from,
-      to: [recipient.email],
-      subject,
-      html,
-    }));
-
+    const payload = chunk.map((recipient) => ({ from, to: [recipient.email], subject, html }));
     const response = await fetch(RESEND_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": `${idempotencyPrefix}-${index / MAX_BATCH}`.slice(0, 256),
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": `${idempotencyPrefix}-${index / MAX_BATCH}`.slice(0, 256) },
       body: JSON.stringify(payload),
     });
-
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       throw new Error(`Email provider rejected the batch (${response.status}): ${detail.slice(0, 300)}`);
@@ -117,7 +101,6 @@ async function sendCourseLaunch(req, courseId) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
-
   try {
     await requireAdmin(req);
     const action = String(req.body?.action || "").trim();
@@ -125,8 +108,7 @@ export default async function handler(req, res) {
     if (action === "courseLaunch") {
       const courseId = String(req.body?.courseId || "").trim();
       if (!courseId) return json(res, 400, { error: "Course ID is required" });
-      const result = await sendCourseLaunch(req, courseId);
-      return json(res, 200, { ok: true, ...result });
+      return json(res, 200, { ok: true, ...(await sendCourseLaunch(req, courseId)) });
     }
 
     if (action === "announcement") {
