@@ -646,7 +646,6 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
   }, [handleSurfaceClick, seekBy]);
 
   const percent = duration > 0 ? Math.min(100, Math.floor((earnedSeconds / duration) * 100)) : 0;
-  const attendanceThresholdReached = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;
   const thumbnail = lesson?.thumbnailUrl || (source.type === "youtube" ? `https://i.ytimg.com/vi/${source.videoId}/hqdefault.jpg` : "");
 
   return (
@@ -850,7 +849,6 @@ export default function CourseDetails() {
   const [user, setUser] = useState(undefined);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
-  const [attendanceReady, setAttendanceReady] = useState(initialProgress?.completed === true || requiredPercent === 0);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [progressMap, setProgressMap] = useState({});
   const [search, setSearch] = useState("");
