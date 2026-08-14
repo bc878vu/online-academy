@@ -1,915 +1,317 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  AlertCircle,
-  ArrowLeft,
-  Award,
-  Bookmark,
-  BookmarkCheck,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  Copy,
-  FileText,
-  GraduationCap,
-  Loader2,
-  Maximize,
-  Minimize,
-  Pause,
-  PictureInPicture2,
-  Play,
-  PlayCircle,
-  RefreshCw,
-  RotateCcw,
-  RotateCw,
-  Search,
-  Share2,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Users,
-  Volume2,
-  VolumeX,
+  AlertCircle, ArrowLeft, Award, CheckCircle2, ChevronLeft, ChevronRight,
+  Clock3, Copy, FileText, GraduationCap, Loader2, Maximize, Minimize,
+  Pause, PictureInPicture2, Play, PlayCircle, RefreshCw, RotateCcw,
+  RotateCw, Search, Share2, ShieldCheck, Sparkles, Star, Users, Volume2, VolumeX
 } from "lucide-react";
 import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
+  collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 
 const COURSE_CACHE_PREFIX = "online_academy_course_";
 const COURSE_CACHE_TIME = 10 * 60 * 1000;
-const WATCH_REQUIREMENT = 25;
-const PROGRESS_SAVE_INTERVAL = 5000;
-const CONTROL_HIDE_DELAY = 2200;
+const CONTROL_HIDE_DELAY = 2400;
+const SAVE_EVERY_MS = 2000;
 
-const getCourseCacheKey = (courseId) => `${COURSE_CACHE_PREFIX}${courseId}`;
-
-function getCachedCourse(courseId) {
+function getCourseCacheKey(id) { return `${COURSE_CACHE_PREFIX}${id}`; }
+function getCachedCourse(id) {
   try {
-    if (!courseId) return null;
-    const raw = sessionStorage.getItem(getCourseCacheKey(courseId));
+    const raw = sessionStorage.getItem(getCourseCacheKey(id));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed?.timestamp || !parsed?.course) return null;
-    if (Date.now() - parsed.timestamp > COURSE_CACHE_TIME) {
-      sessionStorage.removeItem(getCourseCacheKey(courseId));
-      return null;
-    }
-    return parsed.course;
-  } catch {
-    return null;
-  }
+    return parsed?.course && Date.now() - parsed.timestamp < COURSE_CACHE_TIME ? parsed.course : null;
+  } catch { return null; }
 }
-
-function saveCourseCache(courseId, course) {
-  try {
-    sessionStorage.setItem(
-      getCourseCacheKey(courseId),
-      JSON.stringify({ timestamp: Date.now(), course })
-    );
-  } catch {
-    // Optional cache.
-  }
+function saveCourseCache(id, course) {
+  try { sessionStorage.setItem(getCourseCacheKey(id), JSON.stringify({ timestamp: Date.now(), course })); } catch {}
 }
-
 function normalizeLessons(course) {
-  if (!Array.isArray(course?.lessons)) return [];
-  return course.lessons
-    .map((lesson, index) => ({
-      id: lesson?.id || `lesson_${index + 1}`,
-      title: lesson?.title || `Lesson ${index + 1}`,
-      videoUrl: lesson?.videoUrl || lesson?.url || "",
-      videoType: lesson?.videoType || "link",
-      captionsUrl: lesson?.captionsUrl || "",
-      duration: lesson?.duration || "",
-      order: Number(lesson?.order) || index + 1,
-      description: lesson?.description || lesson?.summary || "",
-      resources: Array.isArray(lesson?.resources) ? lesson.resources : [],
-    }))
-    .sort((a, b) => a.order - b.order);
+  return Array.isArray(course?.lessons) ? course.lessons.map((lesson, index) => ({
+    id: lesson?.id || `lesson_${index + 1}`,
+    title: lesson?.title || `Lesson ${index + 1}`,
+    videoUrl: lesson?.videoUrl || lesson?.url || "",
+    videoType: lesson?.videoType || "link",
+    captionsUrl: lesson?.captionsUrl || "",
+    duration: lesson?.duration || "",
+    description: lesson?.description || lesson?.summary || "",
+    order: Number(lesson?.order) || index + 1,
+    requiredWatchPercent: Math.max(0, Math.min(100, Number(lesson?.requiredWatchPercent ?? course?.attendance?.requiredWatchPercent ?? 25))),
+    thumbnailUrl: lesson?.thumbnailUrl || lesson?.thumbnail || "",
+  })).sort((a, b) => a.order - b.order) : [];
 }
-
-function isSafeMediaUrl(value) {
+function isSafeUrl(value) {
+  try { return ["http:", "https:", "blob:"].includes(new URL(String(value || ""), window.location.href).protocol); }
+  catch { return String(value || "").startsWith("/"); }
+}
+function getYouTubeId(value) {
   try {
-    const parsed = new URL(String(value || ""), window.location.href);
-    return ["https:", "http:", "blob:"].includes(parsed.protocol);
-  } catch {
-    return String(value || "").startsWith("/");
-  }
+    const u = new URL(String(value || ""));
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return u.pathname.split("/").filter(Boolean)[0] || "";
+    if (["youtube.com", "youtube-nocookie.com"].includes(host)) {
+      const p = u.pathname.split("/").filter(Boolean);
+      if (p[0] === "watch") return u.searchParams.get("v") || "";
+      if (["embed", "shorts", "live"].includes(p[0])) return p[1] || "";
+    }
+  } catch {}
+  return "";
 }
-
-function getVideoSourceInfo(rawUrl, rawType = "") {
-  const url = String(rawUrl || "").trim();
-  const type = String(rawType || "").toLowerCase();
+function getSource(lesson) {
+  const url = String(lesson?.videoUrl || "").trim();
+  const youtubeId = getYouTubeId(url);
+  if (youtubeId) return { type: "youtube", url, videoId: youtubeId };
   if (!url) return { type: "none", url: "", videoId: "" };
-  if (!isSafeMediaUrl(url)) return { type: "invalid", url: "", videoId: "" };
-
-  try {
-    const parsed = new URL(url, window.location.href);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-    const isYouTube = ["youtube.com", "youtu.be", "youtube-nocookie.com"].includes(host);
-
-    if (isYouTube) {
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      let videoId = "";
-      if (host === "youtu.be") videoId = parts[0] || "";
-      else if (parts[0] === "watch") videoId = parsed.searchParams.get("v") || "";
-      else if (["shorts", "embed", "live"].includes(parts[0])) videoId = parts[1] || "";
-      if (videoId) return { type: "youtube", url, videoId };
-    }
-
-    if (["youtube", "youtube_link", "youtube-link"].includes(type)) {
-      const videoId =
-        parsed.searchParams.get("v") ||
-        parsed.pathname.split("/").filter(Boolean).pop() ||
-        "";
-      if (videoId) return { type: "youtube", url, videoId };
-    }
-
-    return { type: "html5", url, videoId: "" };
-  } catch {
-    return { type: "invalid", url: "", videoId: "" };
-  }
+  return isSafeUrl(url) ? { type: "html5", url, videoId: "" } : { type: "invalid", url: "", videoId: "" };
 }
-
-let youtubeApiPromise = null;
-
-function loadYouTubeIframeAPI() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("YouTube is only available in a browser."));
-  }
-  if (window.YT?.Player) return Promise.resolve(window.YT);
-  if (youtubeApiPromise) return youtubeApiPromise;
-
-  youtubeApiPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
-    const previousReady = window.onYouTubeIframeAPIReady;
-
-    window.onYouTubeIframeAPIReady = () => {
-      try {
-        if (typeof previousReady === "function") previousReady();
-      } catch {
-        // Ignore an unrelated callback error.
-      }
-      if (window.YT?.Player) resolve(window.YT);
-      else reject(new Error("YouTube player API failed to initialize."));
-    };
-
-    if (!existing) {
-      const script = document.createElement("script");
-      script.src = "https://www.youtube.com/iframe_api";
-      script.async = true;
-      script.onerror = () => reject(new Error("Unable to load the YouTube player."));
-      document.head.appendChild(script);
-    } else if (window.YT?.Player) {
-      resolve(window.YT);
-    }
-  });
-
-  return youtubeApiPromise;
+function formatTime(value) {
+  const s = Math.max(0, Math.floor(Number(value) || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
 }
-
-function formatTime(seconds) {
-  const value = Math.max(0, Math.floor(Number(seconds) || 0));
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.floor((value % 3600) / 60);
-  const secs = value % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-  return `${minutes}:${String(secs).padStart(2, "0")}`;
-}
-
 function InfoRow({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0">
-      <span className="flex items-center gap-2 text-sm text-slate-500">
-        <Icon size={16} className="text-blue-600" aria-hidden="true" />
-        {label}
-      </span>
-      <span className="max-w-[60%] truncate text-right text-sm font-bold text-slate-900">{value}</span>
-    </div>
-  );
+  return <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-0"><span className="flex items-center gap-2 text-sm text-slate-500"><Icon size={16} className="text-blue-600" />{label}</span><span className="max-w-[60%] truncate text-right text-sm font-bold text-slate-900">{value}</span></div>;
 }
 
-function VideoLessonPlayer({ user, courseId, selectedLesson, initialProgress, onProgressSaved }) {
-  const source = useMemo(
-    () => getVideoSourceInfo(selectedLesson?.videoUrl, selectedLesson?.videoType),
-    [selectedLesson]
-  );
+let ytApiPromise = null;
+function loadYouTubeAPI() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { try { previous?.(); } catch {} ; window.YT?.Player ? resolve(window.YT) : reject(new Error("YouTube API unavailable")); };
+    if (!existing) {
+      const script = document.createElement("script"); script.src = "https://www.youtube.com/iframe_api"; script.async = true; script.onerror = reject; document.head.appendChild(script);
+    } else if (window.YT?.Player) resolve(window.YT);
+  });
+  return ytApiPromise;
+}
 
+function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved }) {
+  const source = useMemo(() => getSource(lesson), [lesson]);
+  const requiredPercent = Math.max(0, Math.min(100, Number(lesson?.requiredWatchPercent ?? 25)));
   const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(Number(initialProgress?.duration) || 0);
+  const [currentTime, setCurrentTime] = useState(Number(initialProgress?.positionSeconds) || 0);
+  const [earnedSeconds, setEarnedSeconds] = useState(Number(initialProgress?.activeWatchSeconds) || 0);
   const [volume, setVolume] = useState(80);
   const [muted, setMuted] = useState(false);
-  const [duration, setDuration] = useState(Number(initialProgress?.duration) || 0);
-  const [currentTime, setCurrentTime] = useState(Number(initialProgress?.watchedSeconds) || 0);
-  const [saving, setSaving] = useState(false);
-  const [playerError, setPlayerError] = useState("");
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [showControls, setShowControls] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const wrapperRef = useRef(null);
-  const videoRef = useRef(null);
-  const youtubeContainerRef = useRef(null);
-  const youtubePlayerRef = useRef(null);
-  const youtubePollRef = useRef(null);
-  const hideControlsTimerRef = useRef(null);
-  const lastSavedAtRef = useRef(0);
-  const saveProgressRef = useRef(null);
-  const volumeRef = useRef(80);
-  const initialProgressRef = useRef({
-    watchedSeconds: Number(initialProgress?.watchedSeconds) || 0,
-    duration: Number(initialProgress?.duration) || 0,
-    completed25: initialProgress?.completed25 === true,
-  });
-  const maxWatchedRef = useRef(Number(initialProgress?.watchedSeconds) || 0);
-  const latestRef = useRef({
-    currentTime: Number(initialProgress?.watchedSeconds) || 0,
-    duration: Number(initialProgress?.duration) || 0,
-    playing: false,
-  });
+  const wrapRef = useRef(null), videoRef = useRef(null), ytBoxRef = useRef(null), ytPlayerRef = useRef(null);
+  const hideTimerRef = useRef(null), tickRef = useRef(null), lastTickRef = useRef(null), lastSaveRef = useRef(0);
+  const stateRef = useRef({ earned: Number(initialProgress?.activeWatchSeconds) || 0, duration: Number(initialProgress?.duration) || 0, current: Number(initialProgress?.positionSeconds) || 0, completed: initialProgress?.completed === true });
+  const completedRef = useRef(initialProgress?.completed === true);
 
-  useEffect(() => {
-    latestRef.current = { currentTime, duration, playing };
-  }, [currentTime, duration, playing]);
-
-  const stopYouTubePolling = useCallback(() => {
-    if (youtubePollRef.current) {
-      window.clearInterval(youtubePollRef.current);
-      youtubePollRef.current = null;
-    }
-  }, []);
-
-  const destroyYouTubePlayer = useCallback(() => {
-    stopYouTubePolling();
-    const player = youtubePlayerRef.current;
-    youtubePlayerRef.current = null;
+  const persist = useCallback(async (force = false) => {
+    if (!user || !courseId || !lesson?.id) return;
+    const d = Math.max(0, Number(stateRef.current.duration) || 0);
+    if (!d) return;
+    const now = Date.now();
+    const active = Math.min(d, Math.max(0, Number(stateRef.current.earned) || 0));
+    const percent = requiredPercent === 0 ? 100 : Math.min(100, Math.floor((active / d) * 100));
+    const completed = completedRef.current || percent >= requiredPercent;
+    if (!force && now - lastSaveRef.current < SAVE_EVERY_MS && !completed) return;
+    lastSaveRef.current = now;
+    completedRef.current = completed;
+    stateRef.current.completed = completed;
+    setSaving(true);
     try {
-      player?.destroy?.();
-    } catch {
-      // YouTube may already have detached the iframe.
-    }
-  }, [stopYouTubePolling]);
+      await setDoc(doc(db, "lessonProgress", `${user.uid}_${courseId}_${lesson.id}`), {
+        userId: user.uid, courseId, lessonId: lesson.id, lessonTitle: lesson.title,
+        duration: d, positionSeconds: Math.max(0, Number(stateRef.current.current) || 0),
+        activeWatchSeconds: active, percent, requiredWatchPercent: requiredPercent,
+        completed, completedAt: completed ? serverTimestamp() : null,
+        attendance: completed ? "present" : "absent", lastWatchedAt: serverTimestamp(), updatedAt: serverTimestamp()
+      }, { merge: true });
+      onSaved?.(lesson.id, { duration: d, positionSeconds: stateRef.current.current, activeWatchSeconds: active, percent, requiredWatchPercent: requiredPercent, completed, attendance: completed ? "present" : "absent" });
+    } catch (e) {
+      console.error("Progress save error:", e);
+      setError(e?.code === "permission-denied" ? "Attendance save is blocked by Firebase rules. Publish the lessonProgress rule for signed-in users." : "Progress could not be saved. Check your connection.");
+    } finally { setSaving(false); }
+  }, [courseId, lesson, onSaved, requiredPercent, user]);
 
-  const saveProgress = useCallback(
-    async (force = false, override = {}) => {
-      if (!user || !courseId || !selectedLesson?.id) return;
-      const safeDuration = Math.max(0, Number(override.duration ?? latestRef.current.duration) || 0);
-      const safeCurrent = Math.max(0, Number(override.currentTime ?? latestRef.current.currentTime) || 0);
-      if (safeDuration <= 0) return;
-
-      // Keep the furthest verified playback position. Seeking backward never removes attendance.
-      maxWatchedRef.current = Math.max(maxWatchedRef.current, safeCurrent);
-      const safeWatched = Math.min(maxWatchedRef.current, safeDuration);
-      const percent = Math.min(100, Math.round((safeWatched / safeDuration) * 100));
-      const alreadyCompleted = initialProgressRef.current.completed25 === true;
-      const completed25 = alreadyCompleted || percent >= WATCH_REQUIREMENT;
-      const now = Date.now();
-
-      if (!force && now - lastSavedAtRef.current < PROGRESS_SAVE_INTERVAL) return;
-      lastSavedAtRef.current = now;
-      setSaving(true);
-
-      try {
-        const progressRef = doc(db, "lessonProgress", `${user.uid}_${courseId}_${selectedLesson.id}`);
-        await setDoc(
-          progressRef,
-          {
-            userId: user.uid,
-            courseId,
-            lessonId: selectedLesson.id,
-            lessonTitle: selectedLesson.title,
-            watchedSeconds: safeWatched,
-            duration: safeDuration,
-            percent,
-            requiredWatchPercent: WATCH_REQUIREMENT,
-            completed25,
-            attendance: completed25 ? "present" : "absent",
-            lastWatchedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-        initialProgressRef.current.completed25 = completed25;
-        onProgressSaved?.(selectedLesson.id, {
-          watchedSeconds: safeWatched,
-          duration: safeDuration,
-          percent,
-          completed25,
-          attendance: completed25 ? "present" : "absent",
-        });
-      } catch (error) {
-        console.error("Progress save error:", error);
-        setPlayerError("Progress could not be saved. Please check your connection.");
-      } finally {
-        setSaving(false);
-      }
-    },
-    [courseId, onProgressSaved, selectedLesson, user]
-  );
-
-  useEffect(() => {
-    saveProgressRef.current = saveProgress;
-  }, [saveProgress]);
-
-  const showControlsNow = useCallback(() => {
+  const activity = useCallback(() => {
     setShowControls(true);
-    if (hideControlsTimerRef.current) window.clearTimeout(hideControlsTimerRef.current);
-    if (playing) {
-      hideControlsTimerRef.current = window.setTimeout(() => setShowControls(false), CONTROL_HIDE_DELAY);
+    clearTimeout(hideTimerRef.current);
+    if (playing) hideTimerRef.current = window.setTimeout(() => setShowControls(false), CONTROL_HIDE_DELAY);
+  }, [playing]);
+
+  const flushActiveTime = useCallback(() => {
+    const now = Date.now();
+    if (lastTickRef.current == null) { lastTickRef.current = now; return; }
+    const elapsed = Math.min(1.5, Math.max(0, (now - lastTickRef.current) / 1000));
+    const active = document.visibilityState === "visible" && document.hasFocus() && playing;
+    if (active && elapsed > 0) {
+      const next = Math.min(stateRef.current.duration || Infinity, stateRef.current.earned + elapsed);
+      stateRef.current.earned = next; setEarnedSeconds(next);
     }
+    lastTickRef.current = now;
   }, [playing]);
 
   useEffect(() => {
-    if (!playing) setShowControls(true);
-    else showControlsNow();
-  }, [playing, showControlsNow]);
+    stateRef.current = { earned: Number(initialProgress?.activeWatchSeconds) || 0, duration: Number(initialProgress?.duration) || 0, current: Number(initialProgress?.positionSeconds) || 0, completed: initialProgress?.completed === true };
+    completedRef.current = initialProgress?.completed === true;
+    setDuration(stateRef.current.duration); setCurrentTime(stateRef.current.current); setEarnedSeconds(stateRef.current.earned); setPlaying(false); setError(""); setShowControls(false);
+  }, [lesson?.id]);
 
-  useEffect(() => () => {
-    if (hideControlsTimerRef.current) window.clearTimeout(hideControlsTimerRef.current);
+  useEffect(() => {
+    const onVisibility = () => { flushActiveTime(); if (document.visibilityState !== "visible") persist(true); };
+    document.addEventListener("visibilitychange", onVisibility); window.addEventListener("blur", onVisibility); window.addEventListener("focus", onVisibility);
+    return () => { document.removeEventListener("visibilitychange", onVisibility); window.removeEventListener("blur", onVisibility); window.removeEventListener("focus", onVisibility); };
+  }, [flushActiveTime, persist]);
+
+  useEffect(() => {
+    clearInterval(tickRef.current);
+    if (!playing) return undefined;
+    lastTickRef.current = Date.now();
+    tickRef.current = window.setInterval(() => { flushActiveTime(); persist(false); }, 500);
+    activity();
+    return () => clearInterval(tickRef.current);
+  }, [playing, flushActiveTime, persist, activity]);
+
+  useEffect(() => {
+    const onFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreen); return () => document.removeEventListener("fullscreenchange", onFullscreen);
   }, []);
 
   useEffect(() => {
-    initialProgressRef.current = {
-      watchedSeconds: Number(initialProgress?.watchedSeconds) || 0,
-      duration: Number(initialProgress?.duration) || 0,
-      completed25: initialProgress?.completed25 === true,
-    };
-    maxWatchedRef.current = initialProgressRef.current.watchedSeconds;
-    setDuration(initialProgressRef.current.duration);
-    setCurrentTime(initialProgressRef.current.watchedSeconds);
-    setPlaying(false);
-    setPlayerError("");
-    setShowControls(false);
-  }, [selectedLesson?.id]);
-
-  useEffect(() => {
-    if (source.type !== "youtube" || !source.videoId) {
-      destroyYouTubePlayer();
-      return undefined;
-    }
-
+    if (source.type !== "youtube") { try { ytPlayerRef.current?.destroy?.(); } catch {} ytPlayerRef.current = null; return undefined; }
     let cancelled = false;
-    setPlayerError("");
-
-    loadYouTubeIframeAPI()
-      .then((YT) => {
-        if (cancelled || !youtubeContainerRef.current) return;
-        destroyYouTubePlayer();
-        const target = document.createElement("div");
-        target.className = "h-full w-full";
-        youtubeContainerRef.current.replaceChildren(target);
-
-        const player = new YT.Player(target, {
-          width: "100%",
-          height: "100%",
-          videoId: source.videoId,
-          playerVars: {
-            autoplay: 0,
-            controls: 0,
-            rel: 0,
-            modestbranding: 1,
-            playsinline: 1,
-            enablejsapi: 1,
-            iv_load_policy: 3,
-            fs: 0,
-            origin: window.location.origin,
-          },
-          events: {
-            onReady: (event) => {
-              if (cancelled) return;
-              const d = Number(event.target.getDuration()) || 0;
-              setDuration(d);
-              const start = Number(initialProgressRef.current.watchedSeconds) || 0;
-              if (start > 0 && start < d) event.target.seekTo(start, true);
-              event.target.setVolume(volumeRef.current);
-            },
-            onStateChange: (event) => {
-              if (cancelled) return;
-              const isPlaying = event.data === YT.PlayerState.PLAYING;
-              setPlaying(isPlaying);
-              if (isPlaying) {
-                stopYouTubePolling();
-                youtubePollRef.current = window.setInterval(() => {
-                  const p = youtubePlayerRef.current;
-                  if (!p) return;
-                  const current = Number(p.getCurrentTime?.()) || 0;
-                  const d = Number(p.getDuration?.()) || latestRef.current.duration;
-                  setCurrentTime(current);
-                  setDuration(d);
-                  latestRef.current = { currentTime: current, duration: d, playing: true };
-                  saveProgress(false, { currentTime: current, duration: d });
-                }, 1000);
-              } else {
-                stopYouTubePolling();
-                const p = youtubePlayerRef.current;
-                const current = Number(p?.getCurrentTime?.()) || latestRef.current.currentTime;
-                const d = Number(p?.getDuration?.()) || latestRef.current.duration;
-                setCurrentTime(current);
-                setDuration(d);
-                latestRef.current = { currentTime: current, duration: d, playing: false };
-                saveProgress(true, { currentTime: current, duration: d });
-              }
-            },
-            onError: () => setPlayerError("This lesson video could not be loaded."),
-          },
-        });
-        youtubePlayerRef.current = player;
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error("YouTube player error:", error);
-          setPlayerError("The video player could not be initialized.");
+    loadYouTubeAPI().then((YT) => {
+      if (cancelled || !ytBoxRef.current) return;
+      try { ytPlayerRef.current?.destroy?.(); } catch {}
+      ytBoxRef.current.innerHTML = "";
+      const target = document.createElement("div"); target.className = "h-full w-full"; ytBoxRef.current.appendChild(target);
+      const player = new YT.Player(target, {
+        width: "100%", height: "100%", videoId: source.videoId,
+        playerVars: { autoplay: 0, controls: 0, rel: 0, modestbranding: 1, playsinline: 1, enablejsapi: 1, fs: 0, origin: window.location.origin },
+        events: {
+          onReady: (e) => { if (cancelled) return; const d = Number(e.target.getDuration()) || 0; stateRef.current.duration = d; setDuration(d); const p = Number(initialProgress?.positionSeconds) || 0; if (p > 0 && p < d) e.target.seekTo(p, true); e.target.setVolume(volume); },
+          onStateChange: (e) => { if (cancelled) return; const isPlaying = e.data === YT.PlayerState.PLAYING; setPlaying(isPlaying); if (!isPlaying) { flushActiveTime(); persist(true); } },
+          onError: () => setError("This lesson video could not be loaded.")
         }
       });
+      ytPlayerRef.current = player;
+    }).catch(() => setError("YouTube player could not be initialized."));
+    return () => { cancelled = true; try { ytPlayerRef.current?.destroy?.(); } catch {} ytPlayerRef.current = null; };
+  }, [source.type, source.videoId]);
 
-    return () => {
-      cancelled = true;
-      destroyYouTubePlayer();
-    };
-  }, [destroyYouTubePlayer, source.type, source.videoId, stopYouTubePolling]);
-
-  useEffect(() => {
-    const handleFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", handleFullscreen);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreen);
-  }, []);
-
-  useEffect(() => () => {
-    const last = latestRef.current;
-    saveProgressRef.current?.(true, { currentTime: last.currentTime, duration: last.duration });
-    destroyYouTubePlayer();
-  }, [destroyYouTubePlayer]);
+  useEffect(() => () => { flushActiveTime(); persist(true); clearTimeout(hideTimerRef.current); clearInterval(tickRef.current); }, [flushActiveTime, persist]);
 
   const togglePlay = async () => {
-    showControlsNow();
-    if (source.type === "youtube") {
-      const player = youtubePlayerRef.current;
-      if (!player) return;
-      if (playing) player.pauseVideo?.();
-      else player.playVideo?.();
-      return;
-    }
-    const video = videoRef.current;
-    if (!video) return;
-    try {
-      if (video.paused) await video.play();
-      else video.pause();
-    } catch {
-      setPlayerError("The browser blocked playback.");
-    }
+    activity();
+    if (source.type === "youtube") { const p = ytPlayerRef.current; if (!p) return; playing ? p.pauseVideo?.() : p.playVideo?.(); return; }
+    const v = videoRef.current; if (!v) return;
+    try { if (v.paused) await v.play(); else v.pause(); } catch { setError("The browser blocked playback. Click the video again to start it."); }
   };
-
-  const seekBy = (seconds) => {
-    showControlsNow();
-    const target = Math.max(0, Math.min(duration || Infinity, currentTime + seconds));
-    if (source.type === "youtube") youtubePlayerRef.current?.seekTo?.(target, true);
-    else if (videoRef.current) videoRef.current.currentTime = target;
-    setCurrentTime(target);
+  const seekTo = (time) => {
+    activity(); const target = Math.max(0, Math.min(duration || Infinity, time)); stateRef.current.current = target; setCurrentTime(target);
+    if (source.type === "youtube") ytPlayerRef.current?.seekTo?.(target, true); else if (videoRef.current) videoRef.current.currentTime = target;
   };
-
-  const handleSeek = (event) => {
-    showControlsNow();
-    const value = Number(event.target.value);
-    const target = duration > 0 ? (value / 100) * duration : 0;
-    if (source.type === "youtube") youtubePlayerRef.current?.seekTo?.(target, true);
-    else if (videoRef.current) videoRef.current.currentTime = target;
-    setCurrentTime(target);
-  };
-
-  const handleVolume = (value) => {
-    const next = Number(value);
-    volumeRef.current = next;
-    setVolume(next);
-    setMuted(next === 0);
-    if (source.type === "youtube") youtubePlayerRef.current?.setVolume?.(next);
-    else if (videoRef.current) {
-      videoRef.current.volume = next / 100;
-      videoRef.current.muted = next === 0;
-    }
-  };
-
-  const toggleMute = () => {
-    const next = !muted;
-    setMuted(next);
-    if (source.type === "youtube") {
-      if (next) youtubePlayerRef.current?.mute?.();
-      else youtubePlayerRef.current?.unMute?.();
-    } else if (videoRef.current) {
-      videoRef.current.muted = next;
-    }
-  };
-
-  const changeSpeed = (value) => {
-    const next = Number(value);
-    setSpeed(next);
-    if (source.type === "youtube") youtubePlayerRef.current?.setPlaybackRate?.(next);
-    else if (videoRef.current) videoRef.current.playbackRate = next;
-    showControlsNow();
-  };
-
-  const toggleFullscreen = async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await wrapperRef.current?.requestFullscreen?.();
-    } catch {
-      setPlayerError("Fullscreen is not available in this browser.");
-    }
-    showControlsNow();
-  };
-
-  const togglePictureInPicture = async () => {
-    try {
-      if (source.type !== "html5" || !videoRef.current || !document.pictureInPictureEnabled) {
-        setPlayerError("Mini-player is available for supported video files.");
-        return;
-      }
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else await videoRef.current.requestPictureInPicture();
-    } catch {
-      setPlayerError("Mini-player could not be started.");
-    }
-    showControlsNow();
-  };
-
-  const handleHtmlTimeUpdate = (event) => {
-    const video = event.currentTarget;
-    const next = Number(video.currentTime) || 0;
-    const d = Number(video.duration) || duration;
-    setCurrentTime(next);
-    setDuration(d);
-    latestRef.current = { currentTime: next, duration: d, playing: !video.paused };
-    saveProgress(false, { currentTime: next, duration: d });
-  };
-
-  const attendanceReady = initialProgressRef.current.completed25 || (duration > 0 && Math.round((Math.max(maxWatchedRef.current, currentTime) / duration) * 100) >= WATCH_REQUIREMENT);
-  const percent = duration > 0 ? Math.min(100, Math.round((Math.max(maxWatchedRef.current, currentTime) / duration) * 100)) : 0;
-
-  const handlePlayerActivity = () => showControlsNow();
-  const handleVideoClick = () => togglePlay();
+  const seekBy = (seconds) => seekTo(currentTime + seconds);
+  const setVolumeSafe = (value) => { const v = Number(value); setVolume(v); setMuted(v === 0); if (source.type === "youtube") ytPlayerRef.current?.setVolume?.(v); else if (videoRef.current) { videoRef.current.volume = v / 100; videoRef.current.muted = v === 0; } };
+  const toggleMute = () => { const next = !muted; setMuted(next); if (source.type === "youtube") next ? ytPlayerRef.current?.mute?.() : ytPlayerRef.current?.unMute?.(); else if (videoRef.current) videoRef.current.muted = next; };
+  const changeSpeed = (value) => { const next = Number(value); setSpeed(next); if (source.type === "youtube") ytPlayerRef.current?.setPlaybackRate?.(next); else if (videoRef.current) videoRef.current.playbackRate = next; activity(); };
+  const toggleFullscreen = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await wrapRef.current?.requestFullscreen?.(); } catch { setError("Fullscreen is not available in this browser."); } activity(); };
+  const togglePip = async () => { try { if (source.type !== "html5" || !videoRef.current || !document.pictureInPictureEnabled) throw new Error(); if (document.pictureInPictureElement) await document.exitPictureInPicture(); else await videoRef.current.requestPictureInPicture(); } catch { setError("Picture-in-picture is available for supported direct video files."); } activity(); };
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.target?.tagName === "INPUT" || event.target?.tagName === "SELECT" || event.target?.tagName === "TEXTAREA") return;
-      if (event.code === "Space") {
-        event.preventDefault();
-        togglePlay();
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        seekBy(-10);
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        seekBy(10);
-      } else if (event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        toggleFullscreen();
-      } else if (event.key.toLowerCase() === "m") {
-        event.preventDefault();
-        toggleMute();
-      }
+    const key = (e) => {
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target?.tagName)) return;
+      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); seekBy(-10); }
+      if (e.key === "ArrowRight") { e.preventDefault(); seekBy(10); }
+      if (e.key.toLowerCase() === "m") { e.preventDefault(); toggleMute(); }
+      if (e.key.toLowerCase() === "f") { e.preventDefault(); toggleFullscreen(); }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
   });
 
-  return (
-    <section
-      ref={wrapperRef}
-      className={`overflow-hidden bg-slate-950 shadow-2xl shadow-slate-950/10 ${isFullscreen ? "flex h-screen flex-col rounded-none" : "rounded-[28px]"}`}
-      onMouseMove={handlePlayerActivity}
-      onTouchStart={handlePlayerActivity}
-    >
-      <div className="relative aspect-video w-full bg-black">
-        {source.type === "youtube" && <div ref={youtubeContainerRef} className="absolute inset-0" />}
+  const percent = duration > 0 ? Math.min(100, Math.floor((earnedSeconds / duration) * 100)) : 0;
+  const attendanceReady = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;
+  const thumbnail = lesson?.thumbnailUrl || (source.type === "youtube" ? `https://i.ytimg.com/vi/${source.videoId}/hqdefault.jpg` : "");
 
-        {source.type === "html5" && (
-          <video
-            ref={videoRef}
-            src={source.url}
-            className="absolute inset-0 h-full w-full bg-black object-contain"
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={(event) => {
-              const d = Number(event.currentTarget.duration) || 0;
-              setDuration(d);
-              const start = Number(initialProgressRef.current.watchedSeconds) || 0;
-              if (start > 0 && start < d) event.currentTarget.currentTime = start;
-            }}
-            onTimeUpdate={handleHtmlTimeUpdate}
-            onPlay={() => setPlaying(true)}
-            onPause={() => {
-              setPlaying(false);
-              saveProgress(true);
-            }}
-            onEnded={() => {
-              setPlaying(false);
-              if (videoRef.current?.duration) {
-                maxWatchedRef.current = Math.max(maxWatchedRef.current, videoRef.current.duration);
-                saveProgress(true, { currentTime: videoRef.current.duration, duration: videoRef.current.duration });
-              }
-            }}
-            onError={() => setPlayerError("This lesson video could not be loaded.")}
-          >
-            {selectedLesson?.captionsUrl && isSafeMediaUrl(selectedLesson.captionsUrl) && (
-              <track kind="captions" src={selectedLesson.captionsUrl} default />
-            )}
-          </video>
-        )}
-
-        {source.type === "none" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-white">
-            <PlayCircle size={42} className="text-slate-500" />
-            <p className="mt-4 text-lg font-bold">No lesson video available</p>
-            <p className="mt-1 max-w-sm text-sm text-slate-400">This lesson is published, but its video source has not been added yet.</p>
+  return <section ref={wrapRef} className={`overflow-hidden bg-slate-950 shadow-2xl ${fullscreen ? "flex h-screen flex-col rounded-none" : "rounded-[28px]"}`} onMouseMove={activity} onTouchStart={activity}>
+    <div className="relative aspect-video w-full bg-black">
+      {thumbnail && source.type === "html5" && <img src={thumbnail} alt="" className="pointer-events-none absolute inset-0 z-0 h-full w-full object-contain opacity-20" />}
+      {source.type === "youtube" && <div ref={ytBoxRef} className="absolute inset-0 z-0" />}
+      {source.type === "html5" && <video ref={videoRef} src={source.url} poster={thumbnail || undefined} className="absolute inset-0 z-0 h-full w-full bg-black object-contain" playsInline preload="metadata"
+        onLoadedMetadata={(e) => { const d = Number(e.currentTarget.duration) || 0; stateRef.current.duration = d; setDuration(d); const p = Number(initialProgress?.positionSeconds) || 0; if (p > 0 && p < d) e.currentTarget.currentTime = p; e.currentTarget.volume = volume / 100; e.currentTarget.muted = muted; }}
+        onTimeUpdate={(e) => { const t = Number(e.currentTarget.currentTime) || 0; stateRef.current.current = t; setCurrentTime(t); }}
+        onPlay={() => { setPlaying(true); lastTickRef.current = Date.now(); }} onPause={() => { flushActiveTime(); setPlaying(false); persist(true); }}
+        onEnded={() => { flushActiveTime(); setPlaying(false); persist(true); }} onError={() => setError("This lesson video could not be loaded.")}>
+        {lesson?.captionsUrl && isSafeUrl(lesson.captionsUrl) && <track kind="captions" src={lesson.captionsUrl} default />}
+      </video>}
+      {source.type === "none" && <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white"><PlayCircle size={50} className="text-slate-500" /><p className="mt-3 font-bold">No lesson video available</p></div>}
+      {source.type === "invalid" && <div className="absolute inset-0 flex items-center justify-center text-white">Invalid lesson video URL.</div>}
+      {source.type !== "none" && source.type !== "invalid" && <button type="button" aria-label={playing ? "Pause lesson" : "Play lesson"} onClick={togglePlay} className="absolute inset-0 z-10 cursor-pointer bg-transparent focus:outline-none" />}
+      {error && <div className="absolute left-3 right-3 top-3 z-40 rounded-xl border border-red-400/30 bg-red-950/90 px-4 py-3 text-xs font-semibold text-red-100 shadow-xl sm:left-5 sm:right-5">{error}</div>}
+      {source.type !== "none" && source.type !== "invalid" && <div className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-3 pb-3 pt-16 transition duration-300 sm:px-5 sm:pb-5 ${showControls ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`} onClick={(e) => e.stopPropagation()} onMouseMove={(e) => { e.stopPropagation(); activity(); }} onTouchStart={(e) => { e.stopPropagation(); activity(); }}>
+        <input type="range" min="0" max="100" step="0.1" value={duration ? (currentTime / duration) * 100 : 0} onChange={(e) => seekTo((Number(e.target.value) / 100) * duration)} className="mb-3 h-1.5 w-full cursor-pointer accent-blue-500" aria-label="Video position" />
+        <div className="flex items-center gap-2 text-white">
+          <button type="button" onClick={togglePlay} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={17} /> : <Play size={17} />}</button>
+          <button type="button" onClick={() => seekBy(-10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Back 10 seconds"><RotateCcw size={17} /></button>
+          <button type="button" onClick={() => seekBy(10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Forward 10 seconds"><RotateCw size={17} /></button>
+          <span className="min-w-[84px] text-xs font-bold tabular-nums text-slate-200">{formatTime(currentTime)} / {formatTime(duration)}</span>
+          <span className="hidden rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-black text-emerald-300 sm:inline-flex">Active {percent}%</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button type="button" onClick={toggleMute} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={muted ? "Unmute" : "Mute"}>{muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
+            <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(e) => setVolumeSafe(e.target.value)} className="hidden w-20 accent-blue-500 sm:block" />
+            <select value={speed} onChange={(e) => changeSpeed(e.target.value)} className="h-9 rounded-lg border border-white/10 bg-white/10 px-2 text-xs font-bold text-white outline-none"><option value="0.75" className="text-slate-900">0.75x</option><option value="1" className="text-slate-900">1x</option><option value="1.25" className="text-slate-900">1.25x</option><option value="1.5" className="text-slate-900">1.5x</option><option value="1.75" className="text-slate-900">1.75x</option><option value="2" className="text-slate-900">2x</option></select>
+            {source.type === "html5" && <button type="button" onClick={togglePip} className="hidden h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 sm:inline-flex" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
+            <button type="button" onClick={toggleFullscreen} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
           </div>
-        )}
-
-        {source.type === "invalid" && (
-          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-white">
-            <p className="text-sm text-slate-300">The lesson video link is invalid.</p>
-          </div>
-        )}
-
-        {source.type !== "none" && source.type !== "invalid" && (
-          <button
-            type="button"
-            aria-label={playing ? "Pause lesson" : "Play lesson"}
-            onClick={handleVideoClick}
-            onMouseMove={handlePlayerActivity}
-            onTouchStart={handlePlayerActivity}
-            className="absolute inset-0 z-10 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60"
-          />
-        )}
-
-        {playerError && (
-          <div className="absolute left-3 right-3 top-3 z-30 rounded-xl border border-red-400/30 bg-red-950/85 px-4 py-3 text-xs font-semibold text-red-100 shadow-xl sm:left-5 sm:right-5 sm:top-5">{playerError}</div>
-        )}
-
-        {source.type !== "none" && source.type !== "invalid" && (
-          <div
-            className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-3 pb-3 pt-16 transition-all duration-300 sm:px-5 sm:pb-5 ${showControls ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
-            onMouseMove={(event) => event.stopPropagation()}
-            onTouchStart={(event) => event.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <input type="range" min="0" max="100" step="0.1" value={percent} onChange={handleSeek} className="h-1.5 w-full cursor-pointer accent-blue-500" aria-label="Video progress" />
-            </div>
-
-            <div className="flex items-center gap-2 text-white">
-              <button type="button" onClick={togglePlay} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20" aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={17} /> : <Play size={17} />}</button>
-              <button type="button" onClick={() => seekBy(-10)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20" aria-label="Rewind 10 seconds"><RotateCcw size={17} /></button>
-              <button type="button" onClick={() => seekBy(10)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20" aria-label="Forward 10 seconds"><RotateCw size={17} /></button>
-              <span className="min-w-[82px] text-xs font-bold tabular-nums text-slate-200">{formatTime(currentTime)} / {formatTime(duration)}</span>
-
-              <div className="ml-auto flex items-center gap-1.5">
-                <div className="relative hidden sm:block">
-                  <button type="button" onClick={toggleMute} className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20" aria-label={muted || volume === 0 ? "Unmute" : "Mute"}>{muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
-                  <input type="range" min="0" max="100" value={volume} onChange={(event) => handleVolume(event.target.value)} className="absolute bottom-10 left-1/2 w-24 -translate-x-1/2 accent-blue-500" aria-label="Volume" />
-                </div>
-
-                <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 rounded-lg border border-white/10 bg-white/10 px-2 text-xs font-bold text-white outline-none" aria-label="Playback speed">
-                  {[0.75, 1, 1.25, 1.5, 1.75, 2].map((value) => <option key={value} value={value} className="text-slate-900">{value}x</option>)}
-                </select>
-
-                {source.type === "html5" && <button type="button" onClick={togglePictureInPicture} className="hidden h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 sm:inline-flex" aria-label="Open mini-player"><PictureInPicture2 size={17} /></button>}
-                <button type="button" onClick={toggleFullscreen} className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20" aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>{isFullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-xs sm:px-5">
-        <div className="flex items-center gap-2 text-slate-300"><ShieldCheck size={15} className="text-emerald-400" /><span>Active watch time counts toward attendance.</span></div>
-        <div className="flex items-center gap-2 font-bold"><span className={attendanceReady ? "text-emerald-400" : "text-blue-300"}>{attendanceReady ? "Present" : `${WATCH_REQUIREMENT}% watch required`}</span>{saving && <Loader2 size={14} className="animate-spin text-slate-500" />}</div>
-      </div>
-    </section>
-  );
+        </div>
+      </div>}
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-xs"><span className="flex items-center gap-2 text-slate-300"><ShieldCheck size={15} className="text-emerald-400" />Only active on-screen playback time counts.</span><span className={`font-black ${attendanceReady ? "text-emerald-400" : "text-blue-300"}`}>{attendanceReady ? "Present" : `${requiredPercent}% active time required`}{saving && <Loader2 size={13} className="ml-2 inline animate-spin" />}</span></div>
+  </section>;
 }
 
 function LessonList({ lessons, progressMap, selectedIndex, onSelect, search }) {
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return lessons;
-    return lessons.filter((lesson, index) => `${lesson.title} lesson ${index + 1}`.toLowerCase().includes(term));
-  }, [lessons, search]);
-
-  return (
-    <div className="space-y-2">
-      {filtered.map((lesson) => {
-        const originalIndex = lessons.findIndex((item) => item.id === lesson.id);
-        const progress = progressMap[lesson.id];
-        const selected = originalIndex === selectedIndex;
-        const completed = progress?.completed25 === true;
-        return (
-          <button type="button" key={lesson.id} onClick={() => onSelect(originalIndex)} className={`group w-full rounded-2xl border p-3 text-left transition ${selected ? "border-blue-300 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"}`}>
-            <div className="flex items-start gap-3">
-              <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${completed ? "bg-emerald-100 text-emerald-700" : selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{completed ? <CheckCircle2 size={18} /> : <PlayCircle size={18} />}</span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-start justify-between gap-2"><span className="line-clamp-2 text-sm font-extrabold leading-5 text-slate-900">{originalIndex + 1}. {lesson.title}</span>{completed && <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">Present</span>}</span>
-                <span className="mt-1 flex items-center gap-2 text-[11px] font-semibold text-slate-500"><Clock3 size={13} /> {lesson.duration || "Self-paced"}{!completed && progress?.percent > 0 && ` • ${progress.percent}% watched`}</span>
-                {!completed && progress?.percent > 0 && <span className="mt-2 block h-1 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-blue-500" style={{ width: `${Math.min(100, progress.percent)}%` }} /></span>}
-              </span>
-            </div>
-          </button>
-        );
-      })}
-      {filtered.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No lessons match your search.</div>}
-    </div>
-  );
+  const filtered = lessons.filter((l, i) => !search || `${l.title} lesson ${i + 1}`.toLowerCase().includes(search.toLowerCase()));
+  return <div className="space-y-2">{filtered.map((lesson) => { const i = lessons.findIndex(x => x.id === lesson.id), p = progressMap[lesson.id], done = p?.completed === true; return <button key={lesson.id} type="button" onClick={() => onSelect(i)} className={`w-full rounded-2xl border p-3 text-left transition ${i === selectedIndex ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200"}`}><div className="flex gap-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${done ? "bg-emerald-100 text-emerald-700" : i === selectedIndex ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? <CheckCircle2 size={18} /> : <PlayCircle size={18} />}</span><span className="min-w-0 flex-1"><span className="flex justify-between gap-2"><span className="line-clamp-2 text-sm font-extrabold text-slate-900">{i + 1}. {lesson.title}</span>{done && <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">Present</span>}</span><span className="mt-1 flex items-center gap-2 text-[11px] font-semibold text-slate-500"><Clock3 size={13} />{lesson.duration || "Self-paced"}{!done && p?.percent > 0 ? ` • ${p.percent}% active` : ""}</span></span></div></button>; })}</div>;
 }
 
 function CourseDetails() {
   const { courseId } = useParams();
-  const cachedCourse = getCachedCourse(courseId);
-  const [course, setCourse] = useState(cachedCourse);
-  const [loading, setLoading] = useState(() => !cachedCourse);
-  const [error, setError] = useState("");
-  const [user, setUser] = useState(undefined);
-  const [selectedLessonIndex, setSelectedLessonIndex] = useState(0);
-  const [progressMap, setProgressMap] = useState({});
-  const [lessonSearch, setLessonSearch] = useState("");
-  const [mobileCurriculumOpen, setMobileCurriculumOpen] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => setUser(currentUser || null)), []);
-
-  const loadCourse = useCallback(async () => {
-    if (!courseId) {
-      setError("Course information is missing.");
-      setLoading(false);
-      return;
-    }
-    const cached = getCachedCourse(courseId);
-    if (cached) {
-      setCourse(cached);
-      setLoading(false);
-      return;
-    }
-    try {
-      setLoading(true);
-      setError("");
-      const snapshot = await getDoc(doc(db, "courses", courseId));
-      if (!snapshot.exists()) {
-        setCourse(null);
-        setError("The course you are looking for does not exist.");
-        return;
-      }
-      const nextCourse = { id: snapshot.id, ...snapshot.data() };
-      setCourse(nextCourse);
-      saveCourseCache(courseId, nextCourse);
-    } catch (err) {
-      console.error("Course loading error:", err);
-      setError(err?.code === "permission-denied" ? "You do not have permission to view this course." : "Unable to load this course right now.");
-    } finally {
-      setLoading(false);
-    }
-  }, [courseId]);
-
-  useEffect(() => { loadCourse(); }, [loadCourse]);
-
+  const [course, setCourse] = useState(() => getCachedCourse(courseId));
+  const [user, setUser] = useState(undefined), [loading, setLoading] = useState(() => !getCachedCourse(courseId)), [error, setError] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0), [progressMap, setProgressMap] = useState({}), [search, setSearch] = useState("");
+  const [bookmarked, setBookmarked] = useState(false), [copied, setCopied] = useState(false);
+  useEffect(() => onAuthStateChanged(auth, (u) => setUser(u || null)), []);
+  useEffect(() => { try { setBookmarked(localStorage.getItem(`online_academy_bookmark_${courseId}`) === "1"); } catch {} }, [courseId]);
+  const loadCourse = useCallback(async () => { try { setLoading(true); const snap = await getDoc(doc(db, "courses", courseId)); if (!snap.exists()) throw new Error("The course does not exist."); const next = { id: snap.id, ...snap.data() }; setCourse(next); saveCourseCache(courseId, next); setError(""); } catch (e) { setError(e?.code === "permission-denied" ? "You do not have permission to view this course." : e?.message || "Unable to load this course."); } finally { setLoading(false); } }, [courseId]);
+  useEffect(() => { if (!course) loadCourse(); }, [course, loadCourse]);
   const lessons = useMemo(() => normalizeLessons(course), [course]);
-  const selectedLesson = lessons[selectedLessonIndex] || null;
-
-  useEffect(() => {
-    if (lessons.length) setSelectedLessonIndex((current) => Math.min(current, lessons.length - 1));
-  }, [lessons.length]);
-
-  useEffect(() => {
-    try { setBookmarked(localStorage.getItem(`online_academy_bookmark_${courseId}`) === "1"); } catch { setBookmarked(false); }
-  }, [courseId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadProgress() {
-      if (!user || !courseId || !lessons.length) {
-        setProgressMap({});
-        return;
-      }
-      try {
-        const progressQuery = query(collection(db, "lessonProgress"), where("userId", "==", user.uid), where("courseId", "==", courseId));
-        const snapshot = await getDocs(progressQuery);
-        if (cancelled) return;
-        const next = {};
-        snapshot.docs.forEach((item) => {
-          const data = item.data();
-          if (!data.lessonId) return;
-          next[data.lessonId] = {
-            watchedSeconds: Number(data.watchedSeconds) || 0,
-            duration: Number(data.duration) || 0,
-            percent: Number(data.percent) || 0,
-            completed25: data.completed25 === true,
-            attendance: data.attendance || (data.completed25 ? "present" : "absent"),
-          };
-        });
-        setProgressMap(next);
-      } catch (err) {
-        console.error("Progress loading error:", err);
-      }
-    }
-    loadProgress();
-    return () => { cancelled = true; };
-  }, [courseId, lessons.length, user]);
-
-  const title = course?.title || "Untitled Course";
-  const description = course?.description || "Course description will be available soon.";
-  const longDescription = course?.longDescription || description;
-  const category = course?.category || "Online Course";
-  const level = course?.level || "All Levels";
-  const duration = course?.duration || "Self-paced";
-  const students = Number(course?.students || 0);
-  const language = course?.language || "English";
-  const instructor = course?.instructor || "Online Academy";
-  const rating = course?.rating || null;
-  const certificate = course?.certificate !== false;
-  const thumbnail = course?.thumbnail || course?.imageUrl || course?.image || "";
-  const price = Number(course?.price || 0);
-  const oldPrice = Number(course?.oldPrice || 0);
-  const isFree = course?.isPaid === false || price === 0;
-  const discount = !isFree && oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : null;
-
-  const totalCompletedLessons = useMemo(() => lessons.filter((lesson) => progressMap[lesson.id]?.completed25).length, [lessons, progressMap]);
-  const courseProgress = lessons.length ? Math.round((totalCompletedLessons / lessons.length) * 100) : 0;
-  const selectedProgress = selectedLesson ? progressMap[selectedLesson.id] : null;
-
-  const learningPoints = [
-    "Learn through structured lessons",
-    "Track your verified learning progress",
-    "Use modern video controls and playback speed",
-    "Reach 25% active watch time for attendance",
-    "Resume lessons from your saved position",
-    "Complete the course at your own pace",
-  ];
-
-  const handleProgressSaved = useCallback((lessonId, data) => {
-    setProgressMap((previous) => ({ ...previous, [lessonId]: { ...previous[lessonId], ...data } }));
-  }, []);
-
-  const toggleBookmark = () => {
-    const next = !bookmarked;
-    setBookmarked(next);
-    try { localStorage.setItem(`online_academy_bookmark_${courseId}`, next ? "1" : "0"); } catch { /* optional */ }
-  };
-
-  const copyCourseLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch { setCopied(false); }
-  };
-
-  const shareCourse = async () => {
-    try {
-      if (navigator.share) await navigator.share({ title, text: `Explore ${title} on Online Academy`, url: window.location.href });
-      else await copyCourseLink();
-    } catch { /* cancelled */ }
-  };
-
-  const selectLesson = (index) => {
-    setSelectedLessonIndex(index);
-    setMobileCurriculumOpen(false);
-    window.requestAnimationFrame(() => document.getElementById("lesson-player")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
-
-  if (loading) {
-    return <main className="min-h-[calc(100vh-74px)] bg-slate-50"><div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8"><div className="animate-pulse space-y-6"><div className="h-7 w-40 rounded-lg bg-slate-200" /><div className="h-72 rounded-3xl bg-slate-200" /><div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"><div className="aspect-video rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></div></div></main>;
-  }
-
-  if (error || !course) {
-    return <main className="min-h-[calc(100vh-74px)] bg-slate-50"><div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-4 py-10"><div className="w-full rounded-[28px] border border-slate-200 bg-white p-7 text-center shadow-sm sm:p-10"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600"><AlertCircle size={30} /></div><h1 className="mt-5 text-2xl font-black text-slate-950">Course Not Found</h1><p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-slate-600">{error || "The requested course could not be found."}</p><div className="mt-7 flex flex-wrap justify-center gap-3"><button type="button" onClick={loadCourse} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-extrabold text-slate-700 hover:bg-slate-50"><RefreshCw size={17} /> Try Again</button><Link to="/courses" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-extrabold text-white hover:bg-blue-700"><ArrowLeft size={17} /> Back to Courses</Link></div></div></div></main>;
-  }
-
-  return (
-    <main className="min-h-[calc(100vh-74px)] overflow-x-clip bg-slate-50">
-      <section className="relative overflow-hidden bg-slate-950 text-white"><div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(37,99,235,.22),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(14,165,233,.16),transparent_30%)]" /><div className="relative mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10 lg:px-8"><Link to="/courses" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-bold text-slate-300 transition hover:bg-white/10 hover:text-white"><ArrowLeft size={16} /> Back to Courses</Link><div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-blue-300">{category}</span>{certificate && <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-300"><Award size={14} /> Certificate included</span>}</div><h1 className="mt-5 max-w-4xl text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">{title}</h1><p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">{description}</p><div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">{rating && <span className="inline-flex items-center gap-2 font-bold text-white"><Star size={17} className="fill-amber-400 text-amber-400" />{rating}</span>}<span className="inline-flex items-center gap-2 text-slate-400"><Users size={17} /> {students.toLocaleString()} students</span><span className="inline-flex items-center gap-2 text-slate-400"><Clock3 size={17} /> {duration}</span></div><div className="mt-7 flex flex-wrap gap-2"><button type="button" onClick={toggleBookmark} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-extrabold text-white hover:bg-white/10">{bookmarked ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}{bookmarked ? "Saved" : "Save course"}</button><button type="button" onClick={shareCourse} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-extrabold text-white hover:bg-white/10"><Share2 size={17} /> Share</button><button type="button" onClick={copyCourseLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-extrabold text-white hover:bg-white/10"><Copy size={17} /> {copied ? "Copied" : "Copy link"}</button></div></div><aside className="overflow-hidden rounded-[28px] border border-white/10 bg-white text-slate-900 shadow-2xl shadow-black/20">{thumbnail ? <img src={thumbnail} alt="" className="h-44 w-full object-cover" loading="eager" referrerPolicy="no-referrer" /> : <div className="flex h-44 items-center justify-center bg-gradient-to-br from-blue-700 to-slate-900 text-white"><GraduationCap size={54} /></div>}<div className="p-5 sm:p-6"><div className="flex items-end justify-between gap-4"><div><p className="text-3xl font-black text-emerald-600">{isFree ? "Free" : `Rs. ${price.toLocaleString()}`}</p>{!isFree && oldPrice > price && <p className="mt-1 text-sm text-slate-400 line-through">Rs. {oldPrice.toLocaleString()}</p>}</div>{discount && <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700">{discount}% OFF</span>}</div><div className="mt-5 divide-y divide-slate-100"><InfoRow icon={PlayCircle} label="Lessons" value={lessons.length} /><InfoRow icon={Clock3} label="Duration" value={duration} /><InfoRow icon={GraduationCap} label="Level" value={level} /><InfoRow icon={FileText} label="Language" value={language} /><InfoRow icon={Award} label="Certificate" value={certificate ? "Included" : "Not included"} /></div></div></aside></div></div></section>
-
-      <div className="sticky top-[68px] z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl sm:top-[74px]"><div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2.5 sm:px-6 lg:px-8"><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-500"><span className="truncate">{totalCompletedLessons} of {lessons.length} lessons completed</span><span className="shrink-0 text-blue-700">{courseProgress}%</span></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${courseProgress}%` }} /></div></div><button type="button" onClick={() => document.getElementById("lesson-player")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="hidden min-h-10 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-3.5 text-xs font-black text-white hover:bg-blue-700 sm:inline-flex"><Play size={15} fill="currentColor" /> Continue</button></div></div>
-
-      <section className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10 lg:px-8"><div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_350px] lg:items-start"><div className="min-w-0 space-y-7"><section id="lesson-player" className="scroll-mt-28"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-600">Lesson {selectedLessonIndex + 1} of {lessons.length || 1}</p><h2 className="mt-1 truncate text-xl font-black text-slate-950 sm:text-2xl">{selectedLesson?.title || "Course lesson"}</h2></div><span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"><ShieldCheck size={14} className="text-emerald-600" /> Secure progress tracking</span></div>{selectedLesson ? <VideoLessonPlayer user={user} courseId={courseId} selectedLesson={selectedLesson} initialProgress={selectedProgress} onProgressSaved={handleProgressSaved} /> : <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center"><PlayCircle className="mx-auto text-slate-300" size={48} /><p className="mt-4 font-bold text-slate-700">No lessons have been added yet.</p></div>}{selectedLesson?.description && <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-black text-slate-950">About this lesson</h3><p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{selectedLesson.description}</p></div>}<div className="mt-5 flex items-center justify-between gap-3"><button type="button" disabled={selectedLessonIndex <= 0} onClick={() => selectLesson(selectedLessonIndex - 1)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={17} /> Previous</button><button type="button" disabled={selectedLessonIndex >= lessons.length - 1} onClick={() => selectLesson(selectedLessonIndex + 1)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-extrabold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40">Next lesson <ChevronRight size={17} /></button></div></section><section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><div className="flex items-start gap-4"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Sparkles size={23} /></div><div><h2 className="text-2xl font-black text-slate-950">About this course</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600 sm:text-base">{longDescription}</p></div></div></section><section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><div className="flex items-center justify-between gap-4"><div><h2 className="text-2xl font-black text-slate-950">What you will learn</h2><p className="mt-1 text-sm text-slate-500">A focused learning experience built around your progress.</p></div><CheckCircle2 className="hidden text-emerald-500 sm:block" size={28} /></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{learningPoints.map((point) => <div key={point} className="flex gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4"><CheckCircle2 className="mt-0.5 shrink-0 text-emerald-500" size={18} /><span className="text-sm font-semibold leading-6 text-slate-700">{point}</span></div>)}</div></section></div>
-
-      <aside className="lg:sticky lg:top-[112px]"><div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-4 sm:p-5"><button type="button" onClick={() => setMobileCurriculumOpen((value) => !value)} className="flex w-full items-center justify-between gap-4 text-left lg:pointer-events-none"><div><h2 className="text-lg font-black text-slate-950">Course curriculum</h2><p className="mt-1 text-xs font-semibold text-slate-500">{lessons.length} lessons • {totalCompletedLessons} completed</p></div><ChevronDown className={`text-slate-400 transition lg:hidden ${mobileCurriculumOpen ? "rotate-180" : ""}`} size={20} /></button><div className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3"><Search size={16} className="shrink-0 text-slate-400" /><input value={lessonSearch} onChange={(event) => setLessonSearch(event.target.value)} placeholder="Search lessons..." className="h-10 min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400" aria-label="Search lessons" /></div></div><div className={`${mobileCurriculumOpen ? "block" : "hidden"} max-h-[65vh] overflow-y-auto p-3 lg:block`}><LessonList lessons={lessons} progressMap={progressMap} selectedIndex={selectedLessonIndex} onSelect={selectLesson} search={lessonSearch} /></div></div><div className="mt-5 rounded-[28px] border border-blue-100 bg-blue-50 p-5"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 shrink-0 text-blue-600" size={20} /><div><h3 className="font-black text-slate-900">Attendance rule</h3><p className="mt-1 text-sm leading-6 text-slate-600">Watch at least {WATCH_REQUIREMENT}% of a lesson using active playback to mark it Present. Once Present, attendance stays Present even if the lesson is replayed or seeked backward.</p></div></div></div><div className="mt-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-black text-slate-950">Course details</h3><div className="mt-2"><InfoRow icon={GraduationCap} label="Level" value={level} /><InfoRow icon={Clock3} label="Duration" value={duration} /><InfoRow icon={Users} label="Students" value={students.toLocaleString()} /><InfoRow icon={FileText} label="Language" value={language} /><InfoRow icon={Award} label="Certificate" value={certificate ? "Included" : "No"} /><InfoRow icon={Users} label="Instructor" value={instructor} /></div></div></aside></div></section>
-    </main>
-  );
+  const selectedLesson = lessons[selectedIndex] || null;
+  useEffect(() => { if (lessons.length) setSelectedIndex(i => Math.min(i, lessons.length - 1)); }, [lessons.length]);
+  useEffect(() => { let cancelled = false; const run = async () => { if (!user || !courseId || !lessons.length) return; try { const snap = await getDocs(query(collection(db, "lessonProgress"), where("userId", "==", user.uid), where("courseId", "==", courseId))); if (cancelled) return; const map = {}; snap.docs.forEach(d => { const x = d.data(); if (x.lessonId) map[x.lessonId] = { ...x, completed: x.completed === true || x.completed25 === true, percent: Number(x.percent) || 0, activeWatchSeconds: Number(x.activeWatchSeconds) || 0, positionSeconds: Number(x.positionSeconds ?? x.watchedSeconds) || 0, duration: Number(x.duration) || 0 }; }); setProgressMap(map); } catch (e) { console.error("Progress load error:", e); } }; run(); return () => { cancelled = true; }; }, [courseId, lessons.length, user]);
+  const handleSaved = useCallback((id, data) => setProgressMap(prev => ({ ...prev, [id]: { ...prev[id], ...data } })), []);
+  const selectLesson = (i) => { setSelectedIndex(i); window.requestAnimationFrame(() => document.getElementById("lesson-player")?.scrollIntoView({ behavior: "smooth", block: "start" })); };
+  const toggleBookmark = () => { const next = !bookmarked; setBookmarked(next); try { localStorage.setItem(`online_academy_bookmark_${courseId}`, next ? "1" : "0"); } catch {} };
+  const copyLink = async () => { try { await navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {} };
+  const share = async () => { try { if (navigator.share) await navigator.share({ title: course?.title, url: window.location.href }); else await copyLink(); } catch {} };
+  if (loading) return <main className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-7xl animate-pulse space-y-6"><div className="h-48 rounded-3xl bg-slate-200" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div className="aspect-video rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></div></main>;
+  if (error || !course) return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6"><div className="max-w-xl rounded-3xl border bg-white p-10 text-center shadow-sm"><AlertCircle className="mx-auto text-red-500" size={42}/><h1 className="mt-4 text-2xl font-black">Course unavailable</h1><p className="mt-3 text-sm text-slate-600">{error || "Course not found."}</p><button onClick={loadCourse} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white"><RefreshCw size={17}/> Try again</button></div></main>;
+  const completedCount = lessons.filter(l => progressMap[l.id]?.completed).length;
+  const courseProgress = lessons.length ? Math.round(completedCount / lessons.length * 100) : 0;
+  const title = course.title || "Untitled Course", description = course.description || "Course description will be available soon.", level = course.level || "All Levels", duration = course.duration || "Self-paced", students = Number(course.students || 0), category = course.category || "Online Course", language = course.language || "English", instructor = course.instructor || "Online Academy";
+  return <main className="min-h-screen overflow-x-clip bg-slate-50">
+    <section className="bg-slate-950 text-white"><div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8"><Link to="/courses" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold text-slate-300"><ArrowLeft size={16}/> Back to Courses</Link><div className="mt-7 grid gap-8 lg:grid-cols-[1fr_360px]"><div><span className="rounded-full bg-blue-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-blue-300">{category}</span><h1 className="mt-5 text-3xl font-black tracking-tight sm:text-5xl">{title}</h1><p className="mt-4 max-w-3xl text-base leading-7 text-slate-300">{description}</p><div className="mt-6 flex flex-wrap gap-5 text-sm text-slate-400"><span className="flex items-center gap-2"><Users size={16}/> {students.toLocaleString()} students</span><span className="flex items-center gap-2"><Clock3 size={16}/> {duration}</span><span className="flex items-center gap-2"><GraduationCap size={16}/> {level}</span></div><div className="mt-7 flex flex-wrap gap-2"><button onClick={toggleBookmark} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold">{bookmarked ? "Saved" : "Save course"}</button><button onClick={share} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold"><Share2 size={16}/> Share</button><button onClick={copyLink} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold"><Copy size={16}/> {copied ? "Copied" : "Copy link"}</button></div></div><aside className="overflow-hidden rounded-3xl bg-white text-slate-900 shadow-2xl">{course.imageUrl || course.thumbnail ? <img src={course.imageUrl || course.thumbnail} alt="" className="h-44 w-full object-cover"/> : <div className="flex h-44 items-center justify-center bg-gradient-to-br from-blue-700 to-slate-900 text-white"><GraduationCap size={54}/></div>}<div className="p-5"><InfoRow icon={PlayCircle} label="Lessons" value={lessons.length}/><InfoRow icon={Clock3} label="Duration" value={duration}/><InfoRow icon={FileText} label="Language" value={language}/><InfoRow icon={Award} label="Certificate" value={course.certificate === false ? "No" : "Included"}/></div></aside></div></div></section>
+    <div className="sticky top-[68px] z-30 border-b bg-white/95 backdrop-blur"><div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2.5 sm:px-6 lg:px-8"><div className="min-w-0 flex-1"><div className="flex justify-between text-xs font-bold text-slate-500"><span>{completedCount} of {lessons.length} lessons completed</span><span className="text-blue-700">{courseProgress}%</span></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-blue-600" style={{width:`${courseProgress}%`}}/></div></div></div></div>
+    <section className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8"><div className="grid gap-7 lg:grid-cols-[1fr_350px]"><div className="space-y-7"><section id="lesson-player" className="scroll-mt-28"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-[.16em] text-blue-600">Lesson {selectedIndex + 1} of {lessons.length || 1}</p><h2 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">{selectedLesson?.title || "Course lesson"}</h2></div><span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"><ShieldCheck size={14} className="text-emerald-600"/> Secure progress</span></div>{selectedLesson ? <VideoLessonPlayer user={user} courseId={courseId} lesson={selectedLesson} initialProgress={progressMap[selectedLesson.id]} onSaved={handleSaved}/> : <div className="rounded-3xl border bg-white p-10 text-center">No lessons have been added yet.</div>}{selectedLesson?.description && <div className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-black">About this lesson</h3><p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{selectedLesson.description}</p></div>}<div className="flex justify-between gap-3"><button disabled={selectedIndex === 0} onClick={() => selectLesson(selectedIndex - 1)} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-bold disabled:opacity-40"><ChevronLeft size={17}/> Previous</button><button disabled={selectedIndex >= lessons.length - 1} onClick={() => selectLesson(selectedIndex + 1)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40">Next lesson <ChevronRight size={17}/></button></div></section><section className="rounded-3xl border bg-white p-6 shadow-sm"><div className="flex items-start gap-4"><Sparkles className="text-blue-600"/><div><h2 className="text-2xl font-black">About this course</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{course.longDescription || description}</p></div></div></section></div>
+      <aside className="lg:sticky lg:top-[112px]"><div className="overflow-hidden rounded-3xl border bg-white shadow-sm"><div className="border-b p-4"><h2 className="text-lg font-black">Course curriculum</h2><p className="mt-1 text-xs font-semibold text-slate-500">{lessons.length} lessons • {completedCount} completed</p><div className="mt-4 flex items-center gap-2 rounded-xl border bg-slate-50 px-3"><Search size={16} className="text-slate-400"/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search lessons..." className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none"/></div></div><div className="max-h-[65vh] overflow-y-auto p-3"><LessonList lessons={lessons} progressMap={progressMap} selectedIndex={selectedIndex} onSelect={selectLesson} search={search}/></div></div><div className="mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-5"><div className="flex gap-3"><ShieldCheck className="shrink-0 text-blue-600"/><div><h3 className="font-black">Attendance rule</h3><p className="mt-1 text-sm leading-6 text-slate-600">Attendance uses active on-screen playback time only. Seeking, skipping forward/backward and playback speed changes do not grant attendance time. Once Present, it stays Present.</p></div></div></div><div className="mt-5 rounded-3xl border bg-white p-5 shadow-sm"><h3 className="font-black">Course details</h3><InfoRow icon={GraduationCap} label="Level" value={level}/><InfoRow icon={Clock3} label="Duration" value={duration}/><InfoRow icon={Users} label="Instructor" value={instructor}/></div></aside>
+    </div></section>
+  </main>;
 }
-
 export default memo(CourseDetails);
