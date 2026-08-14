@@ -54,28 +54,6 @@ async function generateVerificationCode(email) {
   return data.oobCode;
 }
 
-async function sendFirebaseVerificationEmail(idToken, appUrl) {
-  const { apiKey } = getConfig();
-  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
-
-  const response = await fetch(`${IDENTITY_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      requestType: "VERIFY_EMAIL",
-      idToken,
-      continueUrl: `${appUrl}/verify-email?verified=1`,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Firebase verification email fallback failed (${response.status}): ${detail.slice(0, 350)}`);
-  }
-
-  return response.json();
-}
-
 async function completeVerification(oobCode) {
   const { apiKey } = getConfig();
   if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
@@ -174,13 +152,15 @@ export default async function handler(req, res) {
     } catch (error) {
       if (!isResendDomainRestriction(error)) throw error;
 
-      // Resend remains in testing mode until a sending domain is verified.
-      // Do not block account verification while the custom mail domain is pending.
-      await sendFirebaseVerificationEmail(idToken, appUrl);
+      // Resend cannot deliver to arbitrary recipients while the account is in
+      // testing mode. The browser must use Firebase's built-in sender instead.
+      // This is intentional: the Vercel server cannot call Firebase Auth with
+      // a browser-restricted API key.
       return json(res, 200, {
         ok: true,
-        message: "Verification email sent. Your custom branded email will be used after the Resend domain is verified.",
-        delivery: "firebase-fallback",
+        fallback: "firebase-client",
+        message: "Verification is ready. Firebase will send the verification email while the custom sending domain is pending.",
+        delivery: "firebase-client-fallback",
       });
     }
   } catch (error) {
