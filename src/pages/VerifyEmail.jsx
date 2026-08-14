@@ -12,6 +12,13 @@ export default function VerifyEmail() {
   useEffect(() => {
     let cancelled = false;
     const code = searchParams.get("oobCode");
+    const completedByFirebase = searchParams.get("verified") === "1";
+
+    if (completedByFirebase) {
+      setStatus("success");
+      setMessage("Your email has been verified successfully. Your Online Academy account is now secure.");
+      return undefined;
+    }
 
     if (!code) {
       setStatus("error");
