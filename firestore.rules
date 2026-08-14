@@ -121,6 +121,38 @@ service cloud.firestore {
 
 
     // =====================================================
+    // ORDERS / PAYMENTS
+    // =====================================================
+
+    match /orders/{orderId} {
+
+      // Students may only see their own orders.
+      // The server-side payment APIs use Firebase Admin SDK and therefore
+      // are not affected by these client-side Firestore rules.
+      allow get, list: if isAdmin()
+                       || (
+                         isSignedIn()
+                         && resource.data.userId == request.auth.uid
+                       );
+
+      // Orders are created and updated by trusted server/admin code only.
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // =====================================================
+    // DISCOUNT COUPONS
+    // =====================================================
+
+    match /coupons/{couponId} {
+
+      // Coupon configuration is private admin data. The checkout API reads
+      // coupons through the trusted server instead of exposing them to clients.
+      allow read, create, update, delete: if isAdmin();
+    }
+
+
+    // =====================================================
     // DEFAULT SECURITY
     // =====================================================
 
@@ -130,7 +162,8 @@ service cloud.firestore {
     // Anonymous users      -> NO READ
     // Admin                -> WRITE
     //
-    // This preserves your previous default behavior.
+    // This preserves your previous default behavior for collections that do
+    // not have a more specific rule above.
 
     match /{document=**} {
 
