@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import {
   firestoreGet,
   firestoreSet,
-  getConfig,
   verifyFirebaseIdToken,
 } from "./_firebase.js";
 
@@ -37,22 +36,39 @@ export default async function handler(req, res) {
 
     if (order.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
     if (order.status !== "pending") return json(res, 400, { error: `Order is already ${order.status}` });
-    if (Number(order.finalAmount || 0) <= 0) return json(res, 400, { error: "This order does not require payment" });
+
+    const amount = Number(order.finalAmount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return json(res, 400, { error: "This order does not require payment" });
+    }
 
     const merchantId = requiredEnv("PAYFAST_MERCHANT_ID");
     const securedKey = requiredEnv("PAYFAST_SECURED_KEY");
-    const tokenUrl = requiredEnv("PAYFAST_TOKEN_URL");
-    const checkoutUrl = requiredEnv("PAYFAST_CHECKOUT_URL");
+    const tokenUrl = String(
+      process.env.PAYFAST_TOKEN_URL ||
+        "https://ipguat.apps.net.pk/Ecommerce/api/Transaction/GetAccessToken"
+    ).trim();
+    const checkoutUrl = String(
+      process.env.PAYFAST_CHECKOUT_URL ||
+        "https://ipguat.apps.net.pk/Ecommerce/api/Transaction/PostTransaction"
+    ).trim();
     const merchantName = String(process.env.PAYFAST_MERCHANT_NAME || "Online Academy").trim();
     const siteUrl = String(process.env.SITE_URL || "https://online-academy-plum.vercel.app").replace(/\/$/, "");
 
+    // PayFast's hosted-checkout token must be bound to the same basket/order,
+    // amount and currency that are posted to the checkout form.
     const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Online-Academy-Payments/1.0",
+      },
       body: new URLSearchParams({
-        merchant_id: merchantId,
-        grant_type: "client_credentials",
-        secured_key: securedKey,
+        MERCHANT_ID: merchantId,
+        SECURED_KEY: securedKey,
+        BASKET_ID: orderId,
+        TXNAMT: amount.toFixed(2),
+        CURRENCY_CODE: "PKR",
       }),
     });
 
@@ -81,12 +97,13 @@ export default async function handler(req, res) {
 
     return json(res, 200, {
       action: checkoutUrl,
+      method: "POST",
       fields: {
         MERCHANT_ID: merchantId,
         MERCHANT_NAME: merchantName,
         TOKEN: token,
         PROCCODE: "00",
-        TXNAMT: Number(order.finalAmount).toFixed(2),
+        TXNAMT: amount.toFixed(2),
         CUSTOMER_MOBILE_NO: user.phoneNumber || "",
         CUSTOMER_EMAIL_ADDRESS: user.email || "",
         SIGNATURE: signature,
