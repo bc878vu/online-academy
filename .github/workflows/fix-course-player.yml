@@ -1,0 +1,220 @@
+name: Fix course video player
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-player:
+    if: ${{ !contains(github.event.head_commit.message, '[player-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch CourseDetails player
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/pages/CourseDetails.jsx")
+          text = path.read_text(encoding="utf-8")
+
+          old_reset = '''  useEffect(() => {
+    const base = initialProgress || (user ? readLocalProgress(user.uid, courseId, lesson?.id) : null) || {};
+    stateRef.current = {
+      earned: Number(base.activeWatchSeconds) || 0,
+      duration: Number(base.duration) || 0,
+      current: Number(base.positionSeconds) || 0,
+      completed: base.completed === true,
+    };
+    completedRef.current = base.completed === true;
+    setDuration(stateRef.current.duration);
+    setCurrentTime(stateRef.current.current);
+    setEarnedSeconds(stateRef.current.earned);
+    setPlaying(false);
+    playingRef.current = false;
+    setBuffering(false);
+    bufferingRef.current = false;
+    setPlayerReady(false);
+    setError("");
+    setSyncState("idle");
+    setShowControls(false);
+  }, [courseId, initialProgress, lesson?.id, user]);'''
+
+          new_reset = '''  const lessonKey = `${courseId}:${lesson?.id || ""}:${user?.uid || ""}`;
+
+  useEffect(() => {
+    // Reset only when the actual lesson/user changes. Progress writes update
+    // initialProgress in the parent; reacting to that object here used to
+    // reset the player every few seconds, leaving the video playing behind a
+    // permanent Loading overlay and preventing attendance from accumulating.
+    const base = initialProgress || (user ? readLocalProgress(user.uid, courseId, lesson?.id) : null) || {};
+    stateRef.current = {
+      earned: Number(base.activeWatchSeconds) || 0,
+      duration: Number(base.duration) || 0,
+      current: Number(base.positionSeconds) || 0,
+      completed: base.completed === true,
+    };
+    completedRef.current = base.completed === true;
+    setDuration(stateRef.current.duration);
+    setCurrentTime(stateRef.current.current);
+    setEarnedSeconds(stateRef.current.earned);
+    setPlaying(false);
+    playingRef.current = false;
+    setBuffering(false);
+    bufferingRef.current = false;
+    setPlayerReady(false);
+    setError("");
+    setSyncState("idle");
+    setShowControls(false);
+    lastSaveRef.current = 0;
+    lastTickRef.current = null;
+  }, [lessonKey]);'''
+
+          if old_reset in text:
+              text = text.replace(old_reset, new_reset, 1)
+          elif new_reset not in text:
+              raise SystemExit("reset block not found")
+
+          old_active = '''    const active =
+      document.visibilityState === "visible" &&
+      document.hasFocus() &&
+      playingRef.current &&
+      !bufferingRef.current;'''
+
+          new_active = '''    const pageVisible = document.visibilityState === "visible";
+    const pageFocused = typeof document.hasFocus !== "function" || document.hasFocus();
+    const mobileViewport = window.matchMedia?.("(max-width: 767px)").matches;
+    const active =
+      pageVisible &&
+      (mobileViewport || pageFocused) &&
+      playingRef.current &&
+      !bufferingRef.current;'''
+
+          if old_active in text:
+              text = text.replace(old_active, new_active, 1)
+          elif new_active not in text:
+              raise SystemExit("active timing block not found")
+
+          old_playing = '''              if (event.data === YT.PlayerState.PLAYING) {
+                bufferingRef.current = false;
+                setBuffering(false);
+                playingRef.current = true;
+                setPlaying(true);
+                lastTickRef.current = Date.now();
+                setError("");
+                return;
+              }'''
+
+          new_playing = '''              if (event.data === YT.PlayerState.PLAYING) {
+                bufferingRef.current = false;
+                setBuffering(false);
+                playingRef.current = true;
+                setPlaying(true);
+                setPlayerReady(true);
+                lastTickRef.current = Date.now();
+                setError("");
+                return;
+              }'''
+
+          if old_playing in text:
+              text = text.replace(old_playing, new_playing, 1)
+          elif new_playing not in text:
+              raise SystemExit("playing block not found")
+
+          old_overlay = '''        {(!playerReady || buffering) && source.type !== "none" && source.type !== "invalid" && !error && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="flex items-center gap-2 rounded-xl bg-slate-900/90 px-4 py-3 text-xs font-bold text-white shadow-xl">
+              <Loader2 className="animate-spin" size={16} />
+              {buffering ? "Buffering…" : "Loading video…"}
+            </div>
+          </div>
+        )}'''
+
+          new_overlay = '''        {((!playerReady && !playing) || (buffering && !playing)) && source.type !== "none" && source.type !== "invalid" && !error && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="flex items-center gap-2 rounded-xl bg-slate-900/90 px-4 py-3 text-xs font-bold text-white shadow-xl">
+              <Loader2 className="animate-spin" size={16} />
+              {buffering ? "Buffering…" : "Loading video…"}
+            </div>
+          </div>
+        )}'''
+
+          if old_overlay in text:
+              text = text.replace(old_overlay, new_overlay, 1)
+          elif new_overlay not in text:
+              raise SystemExit("loading overlay block not found")
+
+          old_controls = '''            <div className="flex flex-wrap items-center gap-1.5 text-white sm:gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+                <button type="button" onClick={handleSurfaceClick} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={playing ? "Pause" : "Play"}>
+                  {playing ? <Pause size={17} /> : <Play size={17} />}
+                </button>
+                <button type="button" onClick={() => seekBy(-10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Back 10 seconds"><RotateCcw size={17} /></button>
+                <button type="button" onClick={() => seekBy(10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Forward 10 seconds"><RotateCw size={17} /></button>
+                <span className="min-w-[66px] shrink-0 text-[10px] font-bold tabular-nums text-slate-200 sm:min-w-[84px] sm:text-xs">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <span className="hidden rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-black text-emerald-300 md:inline-flex">Active {percent}%</span>
+              </div>
+
+              <div className="flex w-full items-center justify-end gap-1.5 sm:ml-auto sm:w-auto sm:gap-2">
+                <button type="button" onClick={toggleMute} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={muted ? "Unmute" : "Mute"}>
+                  {muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+                </button>
+                <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="w-14 shrink-0 accent-blue-500 sm:w-16 lg:w-20" />
+                <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 w-[56px] shrink-0 rounded-lg border border-white/10 bg-white/10 px-1 text-center text-[11px] font-bold text-white outline-none sm:w-[60px] sm:text-xs">
+                  {[0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => <option key={rate} value={rate} className="text-slate-900">{rate}x</option>)}
+                </select>
+                {source.type === "html5" && <button type="button" onClick={togglePip} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
+                <button type="button" onClick={toggleFullscreen} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+              </div>
+            </div>'''
+
+          new_controls = '''            <div className="flex flex-col gap-2 text-white sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+                <button type="button" onClick={handleSurfaceClick} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95" aria-label={playing ? "Pause" : "Play"}>
+                  {playing ? <Pause size={17} /> : <Play size={17} />}
+                </button>
+                <button type="button" onClick={() => seekBy(-10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95" aria-label="Back 10 seconds"><RotateCcw size={17} /></button>
+                <button type="button" onClick={() => seekBy(10)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95" aria-label="Forward 10 seconds"><RotateCw size={17} /></button>
+                <span className="min-w-0 truncate text-[10px] font-bold tabular-nums text-slate-200 sm:min-w-[84px] sm:text-xs">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <span className="hidden rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-black text-emerald-300 lg:inline-flex">Active {percent}%</span>
+              </div>
+
+              <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={toggleMute} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95" aria-label={muted ? "Unmute" : "Mute"}>
+                    {muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+                  </button>
+                  <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="hidden w-16 shrink-0 accent-blue-500 sm:block lg:w-20" />
+                </div>
+                <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 w-[56px] shrink-0 rounded-lg border border-white/10 bg-white/10 px-1 text-center text-[11px] font-bold text-white outline-none sm:w-[60px] sm:text-xs">
+                  {[0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => <option key={rate} value={rate} className="text-slate-900">{rate}x</option>)}
+                </select>
+                {source.type === "html5" && <button type="button" onClick={togglePip} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95 sm:flex" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
+                <button type="button" onClick={toggleFullscreen} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition hover:bg-white/20 active:scale-95" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+              </div>
+            </div>'''
+
+          if old_controls in text:
+              text = text.replace(old_controls, new_controls, 1)
+          elif new_controls not in text:
+              raise SystemExit("controls block not found")
+
+          path.write_text(text, encoding="utf-8")
+          print("CourseDetails player patched")
+
+      - name: Commit player fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/CourseDetails.jsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: stabilize course video attendance [player-fix]"
+          git push
