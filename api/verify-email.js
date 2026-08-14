@@ -54,6 +54,28 @@ async function generateVerificationCode(email) {
   return data.oobCode;
 }
 
+async function sendFirebaseVerificationEmail(idToken, appUrl) {
+  const { apiKey } = getConfig();
+  if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
+
+  const response = await fetch(`${IDENTITY_URL}?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      requestType: "VERIFY_EMAIL",
+      idToken,
+      continueUrl: `${appUrl}/verify-email?verified=1`,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Firebase verification email fallback failed (${response.status}): ${detail.slice(0, 350)}`);
+  }
+
+  return response.json();
+}
+
 async function completeVerification(oobCode) {
   const { apiKey } = getConfig();
   if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY environment variable");
@@ -83,7 +105,7 @@ async function sendBrandedEmail(email, displayName, verificationUrl) {
   const safeName = escapeHtml(displayName || "Student");
   const safeUrl = escapeHtml(verificationUrl);
   const html = `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a"><div style="max-width:620px;margin:0 auto;padding:40px 18px"><div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;padding:34px;box-shadow:0 12px 35px rgba(15,23,42,.08)"><div style="display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:800;letter-spacing:.08em">ONLINE ACADEMY</div><h1 style="margin:24px 0 10px;font-size:28px;line-height:1.2">Verify your email address</h1><p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#475569">Hi ${safeName}, please verify your email to secure your Online Academy account.</p><div style="padding:18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;margin:22px 0"><p style="margin:0;font-size:13px;line-height:1.6;color:#64748b">Click the button below to complete verification. This link is single-use.</p></div><p style="margin:0 0 26px"><a href="${safeUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:800">Verify Email</a></p><p style="margin:0;font-size:12px;line-height:1.6;color:#94a3b8">If you did not create an Online Academy account, you can safely ignore this email.</p><div style="margin-top:28px;padding-top:18px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8">Online Academy · Learn. Grow. Succeed.</div></div></div></body></html>`;
-  const text = `Hi ${displayName || "Student"},\n\nPlease verify your email address for Online Academy.\n\nVerify here: ${verificationUrl}\n\nIf you did not create an Online Academy account, you can ignore this email.\n\nOnline Academy`;
+  const text = `Hi ${displayName || "Student"},\n\nPlease verify your email address for Online Academy.\n\nOpen Online Academy → Profile → Verify Email to continue.\n\nIf you did not create an Online Academy account, you can ignore this email.\n\nOnline Academy`;
 
   const response = await fetch(RESEND_URL, {
     method: "POST",
@@ -102,10 +124,19 @@ async function sendBrandedEmail(email, displayName, verificationUrl) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Email provider rejected verification email (${response.status}): ${detail.slice(0, 350)}`);
+    const error = new Error(`Email provider rejected verification email (${response.status}): ${detail.slice(0, 350)}`);
+    error.status = response.status;
+    error.providerDetail = detail;
+    throw error;
   }
 
   return response.json();
+}
+
+function isResendDomainRestriction(error) {
+  if (Number(error?.status) !== 403) return false;
+  const detail = String(error?.providerDetail || error?.message || "").toLowerCase();
+  return detail.includes("testing emails") || detail.includes("verify a domain") || detail.includes("from address");
 }
 
 export default async function handler(req, res) {
@@ -132,9 +163,26 @@ export default async function handler(req, res) {
     const appUrl = getAppUrl();
     const oobCode = await generateVerificationCode(user.email);
     const verificationUrl = `${appUrl}/verify-email?oobCode=${encodeURIComponent(oobCode)}`;
-    await sendBrandedEmail(user.email, user.displayName || user.email.split("@")[0] || "Student", verificationUrl);
 
-    return json(res, 200, { ok: true, message: "Verification email sent" });
+    try {
+      await sendBrandedEmail(user.email, user.displayName || user.email.split("@")[0] || "Student", verificationUrl);
+      return json(res, 200, {
+        ok: true,
+        message: "Professional verification email sent. Please check your inbox.",
+        delivery: "resend",
+      });
+    } catch (error) {
+      if (!isResendDomainRestriction(error)) throw error;
+
+      // Resend remains in testing mode until a sending domain is verified.
+      // Do not block account verification while the custom mail domain is pending.
+      await sendFirebaseVerificationEmail(idToken, appUrl);
+      return json(res, 200, {
+        ok: true,
+        message: "Verification email sent. Your custom branded email will be used after the Resend domain is verified.",
+        delivery: "firebase-fallback",
+      });
+    }
   } catch (error) {
     console.error("Verify email error:", error?.message || error);
     return json(res, Number(error?.status) || 500, { error: error?.message || "Unable to send verification email" });
