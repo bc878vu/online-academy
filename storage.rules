@@ -1,17 +1,26 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() { return request.auth != null; }
-    function admin() { return signedIn() && request.auth.token.email == 'admin@onlineacademy.com'; }
+    function signedIn() {
+      return request.auth != null;
+    }
 
+    function isAdmin() {
+      return signedIn()
+        && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1";
+    }
+
+    // Students need read access to lesson media after signing in.
+    // Only the admin can upload/replace course videos and thumbnails.
     match /courseVideos/{lessonId}/{fileName} {
       allow read: if signedIn();
-      allow write: if admin();
+      allow write: if isAdmin();
     }
 
     match /courseThumbnails/{lessonId}/{fileName} {
       allow read: if signedIn();
-      allow write: if admin();
+      allow write: if isAdmin();
     }
 
     match /{allPaths=**} {
