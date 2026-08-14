@@ -25,6 +25,7 @@ const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const TermsPolicy = lazy(() => import("./pages/TermsPolicy"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const AdminCommerce = lazy(() => import("./pages/AdminCommerce"));
@@ -256,6 +257,7 @@ export default function App() {
       <Route path="/payment/failed" element={<Protected user={user}><PaymentResult failed /></Protected>} />
       <Route path="/certificate" element={<Certificate />} />
       <Route path="/verify-certificate" element={<VerifyCertificate />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/terms" element={<TermsPolicy />} />
       <Route path="/login" element={<AuthOnly user={user}><Login /></AuthOnly>} />
       <Route path="/register" element={<AuthOnly user={user}><Register /></AuthOnly>} />
