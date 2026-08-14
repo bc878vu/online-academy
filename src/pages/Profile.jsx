@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   onAuthStateChanged,
   reload,
-  sendEmailVerification,
   sendPasswordResetEmail,
   signOut,
   updateProfile,
@@ -257,11 +256,22 @@ function Profile() {
     clearMessages();
     try {
       setSecurityBusy(true);
-      await sendEmailVerification(user);
-      setSuccess("Verification email sent. Please check your inbox.");
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to send the verification email.");
+      }
+      setSuccess("Professional verification email sent. Please check your inbox.");
     } catch (err) {
       console.error("Verification email error:", err);
-      setError("Unable to send the verification email right now.");
+      setError(err?.message || "Unable to send the verification email right now.");
     } finally {
       setSecurityBusy(false);
     }
