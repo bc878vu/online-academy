@@ -1,0 +1,64 @@
+name: Hard fix course player
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hard-fix-course-player.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply player fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/CourseDetails.jsx')
+          s = p.read_text()
+
+          s = s.replace('https://www.youtube-nocookie.com/embed/${source.videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&controls=0&rel=0&fs=0&autoplay=0', 'https://www.youtube.com/embed/${source.videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&controls=0&rel=0&fs=0&autoplay=0')
+          s = s.replace('            allowFullScreen\n', '')
+
+          s = s.replace('  const [error, setError] = useState("");\n', '  const [error, setError] = useState("");\n  const [attendanceReady, setAttendanceReady] = useState(initialProgress?.completed === true || requiredPercent === 0);\n')
+
+          s = s.replace('    completedRef.current = completed;\n    stateRef.current.completed = completed;\n', '    completedRef.current = completed;\n    stateRef.current.completed = completed;\n    setAttendanceReady(completed);\n')
+
+          s = s.replace('    completedRef.current = base.completed === true;\n', '    completedRef.current = base.completed === true;\n    setAttendanceReady(base.completed === true || requiredPercent === 0);\n')
+
+          s = s.replace('      setPlayerReady(false);\n    };\n  }, [source.type, source.videoId]);', '    };\n  }, [source.type, source.videoId]);')
+
+          s = s.replace('  const attendanceReady = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;\n', '  const attendanceThresholdReached = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;\n')
+
+          s = s.replace('{((!playerReady && !playing) || (buffering && !playing)) && source.type !== "none" && source.type !== "invalid" && !error && (', '{source.type === "html5" && !playerReady && !error && (')
+          s = s.replace('{attendanceReady ? "Present" : `${requiredPercent}% active time required`}', '{attendanceReady ? "Present" : `${requiredPercent}% active time required`}')
+          s = s.replace('className={`font-black ${attendanceReady ? "text-emerald-400" : "text-blue-300"}`}', 'className={`font-black ${attendanceReady ? "text-emerald-400" : "text-blue-300"}`}')
+
+          # Keep attendance display stable: only switch to Present once the persisted threshold is reached.
+          s = s.replace('  const attendanceThresholdReached = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;\n', '  const attendanceThresholdReached = completedRef.current || requiredPercent === 0 || percent >= requiredPercent;\n')
+          s = s.replace('{attendanceReady ? "Present" : `${requiredPercent}% active time required`}', '{attendanceReady ? "Present" : `${requiredPercent}% active time required`}')
+
+          p.write_text(s)
+          PY
+
+          # Verify the important fixes are actually present.
+          grep -q 'https://www.youtube.com/embed/${source.videoId}' src/pages/CourseDetails.jsx
+          ! grep -q 'youtube-nocookie.com/embed/${source.videoId}' src/pages/CourseDetails.jsx
+          ! grep -q 'allowFullScreen' src/pages/CourseDetails.jsx
+          grep -q 'source.type === "html5" && !playerReady' src/pages/CourseDetails.jsx
+
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/CourseDetails.jsx
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'fix: stabilize course video player and attendance UI'
+            git push
+          fi
