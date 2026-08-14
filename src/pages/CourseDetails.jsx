@@ -291,11 +291,10 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
     }
 
     const elapsed = Math.min(1.5, Math.max(0, (now - lastTickRef.current) / 1000));
-    const active =
-      document.visibilityState === "visible" &&
-      document.hasFocus() &&
-      playingRef.current &&
-      !bufferingRef.current;
+    const pageVisible = document.visibilityState === "visible";
+    const pageFocused = typeof document.hasFocus !== "function" || document.hasFocus();
+    const mobileViewport = window.matchMedia?.("(max-width: 767px)").matches;
+    const active = pageVisible && (mobileViewport || pageFocused) && playingRef.current && !bufferingRef.current;
 
     if (source.type === "youtube" && ytPlayerRef.current?.getCurrentTime) {
       const time = Number(ytPlayerRef.current.getCurrentTime()) || 0;
@@ -337,6 +336,8 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
     }
   }, [activity, playerReady, source.type]);
 
+  const lessonKey = `${courseId}:${lesson?.id || ""}:${user?.uid || ""}`;
+
   useEffect(() => {
     const base = initialProgress || (user ? readLocalProgress(user.uid, courseId, lesson?.id) : null) || {};
     stateRef.current = {
@@ -357,7 +358,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
     setError("");
     setSyncState("idle");
     setShowControls(false);
-  }, [courseId, initialProgress, lesson?.id, user]);
+  }, [lessonKey]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -458,6 +459,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
                 setBuffering(false);
                 playingRef.current = true;
                 setPlaying(true);
+                setPlayerReady(true);
                 lastTickRef.current = Date.now();
                 setError("");
                 return;
@@ -748,7 +750,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
           />
         )}
 
-        {(!playerReady || buffering) && source.type !== "none" && source.type !== "invalid" && !error && (
+        {((!playerReady && !playing) || (buffering && !playing)) && source.type !== "none" && source.type !== "invalid" && !error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div className="flex items-center gap-2 rounded-xl bg-slate-900/90 px-4 py-3 text-xs font-bold text-white shadow-xl">
               <Loader2 className="animate-spin" size={16} />
@@ -781,7 +783,7 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
               aria-label="Video position"
             />
 
-            <div className="flex flex-wrap items-center gap-1.5 text-white sm:gap-2">
+            <div className="flex flex-col gap-2 text-white sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
                 <button type="button" onClick={handleSurfaceClick} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={playing ? "Pause" : "Play"}>
                   {playing ? <Pause size={17} /> : <Play size={17} />}
@@ -796,11 +798,11 @@ function VideoLessonPlayer({ user, courseId, lesson, initialProgress, onSaved })
                 <button type="button" onClick={toggleMute} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={muted ? "Unmute" : "Mute"}>
                   {muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
                 </button>
-                <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="w-14 shrink-0 accent-blue-500 sm:w-16 lg:w-20" />
+                <input aria-label="Volume" type="range" min="0" max="100" value={volume} onChange={(event) => setVolumeSafe(event.target.value)} className="hidden w-14 shrink-0 accent-blue-500 sm:block sm:w-16 lg:w-20" />
                 <select value={speed} onChange={(event) => changeSpeed(event.target.value)} className="h-9 w-[56px] shrink-0 rounded-lg border border-white/10 bg-white/10 px-1 text-center text-[11px] font-bold text-white outline-none sm:w-[60px] sm:text-xs">
                   {[0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => <option key={rate} value={rate} className="text-slate-900">{rate}x</option>)}
                 </select>
-                {source.type === "html5" && <button type="button" onClick={togglePip} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
+                {source.type === "html5" && <button type="button" onClick={togglePip} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 sm:flex" aria-label="Picture in picture"><PictureInPicture2 size={17} /></button>}
                 <button type="button" onClick={toggleFullscreen} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
               </div>
             </div>
