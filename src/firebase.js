@@ -11,8 +11,6 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  setPersistence,
-  browserLocalPersistence,
 } from "firebase/auth";
 
 // ======================================================
@@ -21,17 +19,14 @@ import {
 
 import {
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from "firebase/firestore";
 
 // ======================================================
 // FIREBASE STORAGE
 // ======================================================
 
-import {
-  getStorage,
-} from "firebase/storage";
+import { getStorage } from "firebase/storage";
 
 // ======================================================
 // FIREBASE CONFIGURATION
@@ -76,27 +71,27 @@ if (missingFirebaseConfig.length > 0) {
 
 const app = initializeApp(firebaseConfig);
 
-// Firestore persistence reduces repeat network reads, improves repeat
-// navigation and gives the app a resilient local cache across tabs.
+// IMPORTANT:
+// Do not force IndexedDB persistence here. Chrome's mobile/device emulation,
+// hidden tabs, private browsing and some storage environments can close the
+// IndexedDB database while Firebase is changing auth state. That can leave
+// the whole React app stuck on its auth loader with:
+// "Database is closing/hidden".
+//
+// Memory cache keeps Firestore stable and still avoids duplicate reads during
+// the current page session. Server-side Firestore data remains unchanged.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
+  localCache: memoryLocalCache(),
 });
 
 // ======================================================
 // FIREBASE AUTH
 // ======================================================
 
+// Firebase Auth uses its normal browser persistence automatically. We do not
+// call setPersistence() during module startup because doing so can race with
+// a browser tab/storage transition and produce an uncaught IndexedDB error.
 export const auth = getAuth(app);
-
-// ======================================================
-// AUTH PERSISTENCE
-// ======================================================
-
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error("Firebase persistence setup failed:", error);
-});
 
 // ======================================================
 // GOOGLE AUTH PROVIDER
