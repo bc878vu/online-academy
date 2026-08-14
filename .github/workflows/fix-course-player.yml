@@ -218,3 +218,5 @@ jobs:
           fi
           git commit -m "fix: stabilize course video attendance [player-fix]"
           git push
+
+# Trigger commit ensures this workflow is executed after installation.
