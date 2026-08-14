@@ -6,16 +6,24 @@ import { db } from "../firebase";
 
 function money(value) { return `Rs. ${Number(value || 0).toLocaleString()}`; }
 
+function getCourseImage(course) {
+  if (course?.imageUrl || course?.image || course?.thumbnail) return course.imageUrl || course.image || course.thumbnail;
+  const firstLessonThumbnail = Array.isArray(course?.lessons)
+    ? course.lessons.find((lesson) => lesson?.thumbnailUrl || lesson?.thumbnail)?.thumbnailUrl || course.lessons.find((lesson) => lesson?.thumbnail)?.thumbnail
+    : "";
+  return firstLessonThumbnail || "";
+}
+
 function CourseCard({ course, user }) {
   const title = course.title || course.name || "Untitled Course";
-  const image = course.imageUrl || course.image || "";
+  const image = getCourseImage(course);
   const price = Number(course.price || 0);
   const oldPrice = Number(course.oldPrice || 0);
   const paid = course.isPaid === true || price > 0;
   const discount = oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
 
   return <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
-    <div className="relative h-48 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-800">{image ? <img src={image} alt={title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><BookOpen size={54} className="text-white/90" /></div>}{paid && <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700 shadow-sm">{money(price)}</span>}{discount > 0 && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-black text-white"><BadgePercent size={14} />{discount}% OFF</span>}</div>
+    <div className="relative h-48 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-800">{image ? <img src={image} alt={title} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><BookOpen size={54} className="text-white/90" /></div>}{paid && <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700 shadow-sm">{money(price)}</span>}{discount > 0 && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-black text-white"><BadgePercent size={14} />{discount}% OFF</span>}</div>
     <div className="flex flex-1 flex-col p-5 sm:p-6"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-blue-600"><GraduationCap size={15} />{course.category || "Online Course"}</div><h2 className="mt-3 line-clamp-2 text-xl font-black leading-tight text-slate-900">{title}</h2><p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{course.description || "Start learning with this structured online course."}</p>{(course.duration || course.level) && <div className="mt-5 flex flex-wrap gap-4 border-t border-slate-100 pt-5 text-sm text-slate-500">{course.duration && <span className="flex items-center gap-1.5"><Clock3 size={16} />{course.duration}</span>}{course.level && <span>{course.level}</span>}</div>}
       <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2"><Link to={user ? `/courses/${course.id}` : "/login"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:border-blue-200 hover:text-blue-700">View Course <ArrowRight size={17} /></Link>{paid ? <Link to={user ? `/checkout?courseId=${encodeURIComponent(course.id)}` : "/login"} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-black text-white shadow-md shadow-blue-600/20">Buy Now <Sparkles size={16} /></Link> : <span className="inline-flex items-center justify-center rounded-xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">Free Course</span>}</div>
     </div>
