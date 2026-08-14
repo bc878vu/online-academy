@@ -4,7 +4,12 @@ import { ArrowLeft, CheckCircle, Clock3, Loader2, Mail, ShieldCheck } from "luci
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 
-const RESET_URL = "https://online-academy-plum.vercel.app/reset-password";
+// Firebase uses this URL as the post-action/continue URL.
+// The Firebase Authentication email template should use the Online Academy
+// /reset-password route as its custom Action URL so the actual oobCode is
+// opened directly inside our React reset page.
+const CONTINUE_URL =
+  "https://online-academy-plum.vercel.app/login?passwordReset=success";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -30,12 +35,11 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-      // This is the production Online Academy URL. It is passed as the
-      // continue/state URL; Firebase's Email Templates → Customize action URL
-      // must also point to this same custom handler for the email link itself
-      // to open the Academy page instead of Firebase's hosted widget.
+      // This URL is only the safe destination after Firebase completes the
+      // action. The custom Firebase email Action URL is /reset-password, where
+      // our app receives mode, oobCode, apiKey and continueUrl.
       const actionCodeSettings = {
-        url: RESET_URL,
+        url: CONTINUE_URL,
         handleCodeInApp: false,
       };
 
