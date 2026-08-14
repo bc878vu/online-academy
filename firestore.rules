@@ -21,7 +21,7 @@ service cloud.firestore {
     // =====================================================
 
     match /courses/{courseId} {
-      // Legacy behavior preserved: published courses are publicly readable;
+      // Legacy behavior: published courses are publicly readable;
       // admin can read all courses and is the only writer.
       allow read: if isAdmin()
                   || (resource.data.published == true);
@@ -36,18 +36,14 @@ service cloud.firestore {
     // =====================================================
 
     match /lessonProgress/{progressId} {
-      // Students can only read their own progress.
       allow read: if isAdmin()
                   || (isSignedIn()
                       && resource.data.userId == request.auth.uid);
 
-      // Students may create progress only for themselves.
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.userId == request.auth.uid);
 
-      // Students may update only their own progress and cannot transfer
-      // ownership to another account.
       allow update: if isAdmin()
                     || (isSignedIn()
                         && resource.data.userId == request.auth.uid
@@ -63,7 +59,7 @@ service cloud.firestore {
     // =====================================================
 
     match /certificates/{certificateId} {
-      // Public exact-ID verification only; listing remains disabled.
+      // Public exact-ID verification; listing remains disabled.
       allow get: if true;
       allow list: if false;
 
@@ -77,7 +73,6 @@ service cloud.firestore {
     // =====================================================
 
     match /users/{userId} {
-      // Admin can manage all users; normal users can manage only themselves.
       allow read, create, update, delete: if isAdmin()
         || (isSignedIn() && request.auth.uid == userId);
     }
@@ -86,14 +81,19 @@ service cloud.firestore {
     // DEFAULT SECURITY — LEGACY LOGIC PRESERVED
     // =====================================================
 
+    // For every other collection, preserve the old behavior:
     // Authenticated users -> READ
     // Anonymous users      -> NO READ
     // Admin                -> WRITE
     //
-    // This keeps the previous default behavior while the explicit
-    // lessonProgress and users matches provide tighter ownership controls.
+    // lessonProgress and users are explicitly excluded here so that the
+    // ownership rules above can actually restrict access. Firestore rules
+    // are OR-based: a broad matching allow cannot be overridden by a more
+    // restrictive specific match.
     match /{document=**} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+                  && !document.matches(/^lessonProgress\/.*$/)
+                  && !document.matches(/^users\/.*$/);
       allow write: if isAdmin();
     }
   }
