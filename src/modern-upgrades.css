@@ -3,23 +3,24 @@ html { scroll-behavior: smooth; }
 body { overflow-x: hidden; }
 img { max-width: 100%; }
 
-/* The home page used to render a second mobile-only navbar inside the hero.
-   The global App navbar is the single source of navigation now. */
+/* The home page uses the global App navbar as the single navigation shell. */
 @media (max-width: 1023px) {
   .oa-hero > .relative > .mb-7.flex.items-center.justify-between.gap-4.lg\:hidden { display: none !important; }
   .oa-hero > .relative > .mb-7.grid.gap-2.rounded-2xl.lg\:hidden { display: none !important; }
 }
 
-/* Keep the floating support control clear of the back-to-top control. */
+/* The support control stays in one consistent corner now that the extra
+   floating controls have been removed. It also respects mobile safe areas. */
 button[aria-label="Open reviews, contact and feedback"] {
-  right: 5.75rem !important;
-  bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+  right: max(1rem, env(safe-area-inset-right)) !important;
+  bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  z-index: 70 !important;
 }
 
-@media (max-width: 639px) {
+@media (min-width: 640px) {
   button[aria-label="Open reviews, contact and feedback"] {
-    right: 4.75rem !important;
-    bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+    right: max(1.25rem, env(safe-area-inset-right)) !important;
+    bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
   }
 }
 
