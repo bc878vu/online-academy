@@ -40,9 +40,10 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && requestId == request.auth.uid + "_" + request.resource.data.courseId
         && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "pending"
         && exists(/databases/$(database)/documents/courseCompletions/$(request.auth.uid + "_" + request.resource.data.courseId));
-      allow update: if isAdmin() || (isSignedIn() && requestId == request.auth.uid + "_" + resource.data.courseId && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid && request.resource.data.courseId == resource.data.courseId);
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.status == "rejected");
     }
     match /certificates/{certificateId} {
       allow get: if true;
@@ -70,8 +71,7 @@ service cloud.firestore {
         && request.resource.data.review is string && request.resource.data.review.size() >= 8 && request.resource.data.review.size() <= 1200
         && request.resource.data.status == "published" && request.resource.data.verified == false && request.resource.data.createdAt == request.time;
       allow update: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId && request.resource.data.courseId == resource.data.courseId
-        && request.resource.data.courseTitle == resource.data.courseTitle && request.resource.data.status == resource.data.status
+        && request.resource.data.userId == resource.data.userId && request.resource.data.courseId == resource.data.courseId && request.resource.data.courseTitle == resource.data.courseTitle && request.resource.data.status == resource.data.status
         && request.resource.data.verified == resource.data.verified && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
         && request.resource.data.review is string && request.resource.data.review.size() >= 8 && request.resource.data.review.size() <= 1200);
