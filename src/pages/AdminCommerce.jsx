@@ -8,8 +8,6 @@ import AdminUsers from "./AdminUsers";
 
 export default function AdminCommerce() {
   const [searchParams] = useSearchParams();
-  if (searchParams.get("view") === "users") return <AdminUsers />;
-
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
@@ -27,6 +25,8 @@ export default function AdminCommerce() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (searchParams.get("view") === "users") return <AdminUsers />;
 
   const update = (id, patch) => setCourses((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
 
