@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
+import SEO from "./components/SEO";
 
 const HomePage = lazy(() => import("./pages/Home"));
 const Courses = lazy(() => import("./pages/Courses"));
@@ -75,7 +76,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => onAuthStateChanged(auth, (currentUser) => { setUser(currentUser); setIsAdmin(currentUser?.email?.trim().toLowerCase() === ADMIN_EMAIL); }), []);
   if (user === undefined) return <Loader text="Loading Online Academy..." />;
-  return <div className="flex min-h-screen flex-col bg-slate-50"><Navbar user={user} isAdmin={isAdmin} /><main className="min-w-0 flex-1"><Suspense fallback={<Loader text="Loading page..." />}><Routes>
+  return <div className="flex min-h-screen flex-col bg-slate-50"><SEO /><Navbar user={user} isAdmin={isAdmin} /><main className="min-w-0 flex-1"><Suspense fallback={<Loader text="Loading page..." />}><Routes>
     <Route path="/" element={<HomePage />} /><Route path="/courses" element={<Courses user={user} />} /><Route path="/courses/:courseId" element={<CourseRoute />} /><Route path="/checkout" element={<Protected user={user}><Checkout /></Protected>} /><Route path="/payment/success" element={<Protected user={user}><PaymentResult /></Protected>} /><Route path="/payment/failed" element={<Protected user={user}><PaymentResult failed /></Protected>} /><Route path="/certificate" element={<Certificate />} /><Route path="/verify-certificate" element={<VerifyCertificate />} /><Route path="/verify-email" element={<VerifyEmail />} /><Route path="/terms" element={<TermsPolicy />} /><Route path="/login" element={<AuthOnly user={user}><Login /></AuthOnly>} /><Route path="/register" element={<AuthOnly user={user}><Register /></AuthOnly>} /><Route path="/forgot-password" element={<AuthOnly user={user}><ForgotPassword /></AuthOnly>} /><Route path="/reset-password" element={<ResetPassword />} /><Route path="/admin-login" element={<AdminLogin user={user} isAdmin={isAdmin} adminLoading={false} />} /><Route path="/dashboard" element={<Protected user={user}><Dashboard /></Protected>} /><Route path="/profile" element={<Protected user={user}><Profile /></Protected>} /><Route path="/admin" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminCourses /></AdminOnly>} /><Route path="/admin/assessments" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminAssessments /></AdminOnly>} /><Route path="/admin/certificates" element={<AdminOnly user={user} isAdmin={isAdmin}><Certificate /></AdminOnly>} /><Route path="/admin/commerce" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminCommerce /></AdminOnly>} /><Route path="/admin/discounts" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminDiscounts /></AdminOnly>} /><Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense></main><Footer user={user} isAdmin={isAdmin} /></div>;
 }
