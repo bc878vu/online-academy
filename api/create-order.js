@@ -91,6 +91,7 @@ export default async function handler(req, res) {
     const finalAmount = Math.max(0, Math.round((originalAmount - discountAmount) * 100) / 100);
     const orderId = `OA-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     const now = new Date();
+    const isZeroAmount = finalAmount <= 0;
 
     await firestoreSet(`orders/${orderId}`, {
       orderId,
@@ -102,8 +103,9 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       couponCode: couponCode || "",
-      paymentProvider: "payfast",
-      status: "pending",
+      paymentProvider: isZeroAmount ? "coupon" : "payfast",
+      status: isZeroAmount ? "paid" : "pending",
+      paidAt: isZeroAmount ? now : null,
       createdAt: now,
       updatedAt: now,
     });
@@ -116,8 +118,8 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       currency: "PKR",
-      paymentProvider: "payfast",
-      status: "pending",
+      paymentProvider: isZeroAmount ? "coupon" : "payfast",
+      status: isZeroAmount ? "paid" : "pending",
     });
   } catch (error) {
     console.error("Create order error:", error?.message || error);
