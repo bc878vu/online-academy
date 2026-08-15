@@ -55,7 +55,7 @@ export default function CourseThumbnail({ course, className = "", priority = fal
       referrerPolicy="no-referrer"
       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setIndex((current) => Math.min(current + 1, allSources.length - 1))}
-      className="h-full w-full object-contain object-center transition duration-500"
+      className="h-full w-full object-cover object-center transition duration-500"
     />
     {!sources.length && <div className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-white/15 bg-slate-950/55 px-2 py-1 text-[9px] font-black text-white/80 backdrop-blur"> <BookOpen size={11} /> Course cover</div>}
     {showPlay && <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-950/65 px-2.5 py-1 text-[10px] font-black text-white backdrop-blur-md"><PlayCircle size={12} /> Learn at your pace</span>}
