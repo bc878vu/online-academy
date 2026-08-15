@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =====================================================
-    // AUTH / ADMIN
-    // =====================================================
-
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,160 +12,128 @@ service cloud.firestore {
         && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1";
     }
 
+    function isOwner(data) {
+      return isSignedIn() && data.userId == request.auth.uid;
+    }
 
-    // =====================================================
+    // -----------------------------------------------------
     // COURSES
-    // =====================================================
-
+    // -----------------------------------------------------
     match /courses/{courseId} {
-
-      // Same old logic:
-      // Public users can read published courses.
-      // Admin can read everything.
-      allow read: if isAdmin()
-                  || (
-                    resource.data.published == true
-                  );
-
-      allow create: if isAdmin();
-
-      allow update: if isAdmin();
-
-      allow delete: if isAdmin();
-    }
-
-
-    // =====================================================
-    // LESSON PROGRESS / ATTENDANCE
-    // =====================================================
-
-    match /lessonProgress/{progressId} {
-
-      // Admin can read everything.
-      // Student can read only the progress document whose ID belongs to him.
-      // The app uses: userId_courseId_lessonId
-      allow read: if isAdmin()
-                  || (
-                    isSignedIn()
-                    && progressId.matches('^' + request.auth.uid + '_.*$')
-                  );
-
-      // Student can create progress only for himself.
-      // The document ID is also checked so the client cannot write another
-      // student's progress document.
-      allow create: if isAdmin()
-                    || (
-                      isSignedIn()
-                      && progressId.matches('^' + request.auth.uid + '_.*$')
-                      && request.resource.data.userId == request.auth.uid
-                    );
-
-      // Student can update only his own progress.
-      // Ownership cannot be changed. Using progressId here also allows
-      // setDoc(..., { merge: true }) to update an existing progress document
-      // even if an older document was created before these ownership fields
-      // were stored consistently.
-      allow update: if isAdmin()
-                    || (
-                      isSignedIn()
-                      && progressId.matches('^' + request.auth.uid + '_.*$')
-                      && request.resource.data.userId == request.auth.uid
-                    );
-
-      // Student can delete only his own progress.
-      allow delete: if isAdmin()
-                    || (
-                      isSignedIn()
-                      && progressId.matches('^' + request.auth.uid + '_.*$')
-                    );
-    }
-
-
-    // =====================================================
-    // CERTIFICATES
-    // =====================================================
-
-    match /certificates/{certificateId} {
-
-      // Public exact certificate verification.
-      allow get: if true;
-
-      // Prevent certificate listing/enumeration.
-      allow list: if false;
-
-      // Admin only.
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-
-    // =====================================================
-    // USERS
-    // =====================================================
-
-    match /users/{userId} {
-
-      // Admin can manage all users.
-      // Normal user can manage only his own document.
-      allow read, create, update, delete: if isAdmin()
-        || (
-          isSignedIn()
-          && request.auth.uid == userId
-        );
-    }
-
-
-    // =====================================================
-    // ORDERS / PAYMENTS
-    // =====================================================
-
-    match /orders/{orderId} {
-
-      // Students may only see their own orders.
-      // The server-side payment APIs use Firebase Admin SDK and therefore
-      // are not affected by these client-side Firestore rules.
-      allow get, list: if isAdmin()
-                       || (
-                         isSignedIn()
-                         && resource.data.userId == request.auth.uid
-                       );
-
-      // Orders are created and updated by trusted server/admin code only.
+      allow get, list: if isAdmin() || resource.data.published == true;
       allow create, update, delete: if isAdmin();
     }
 
+    // -----------------------------------------------------
+    // LESSON PROGRESS / ATTENDANCE
+    // Querying by userId is supported because the rule is based on
+    // resource.data.userId rather than only the document-id prefix.
+    // -----------------------------------------------------
+    match /lessonProgress/{progressId} {
+      allow get, list: if isAdmin() || isOwner(resource.data);
 
-    // =====================================================
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && progressId.matches('^' + request.auth.uid + '_.*$')
+                        && request.resource.data.userId == request.auth.uid);
+
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && progressId.matches('^' + request.auth.uid + '_.*$')
+                        && resource.data.userId == request.auth.uid
+                        && request.resource.data.userId == request.auth.uid);
+
+      allow delete: if isAdmin()
+                    || (isSignedIn()
+                        && progressId.matches('^' + request.auth.uid + '_.*$')
+                        && resource.data.userId == request.auth.uid);
+    }
+
+    // -----------------------------------------------------
+    // ASSESSMENT ATTEMPTS
+    // -----------------------------------------------------
+    match /assessmentAttempts/{attemptId} {
+      allow get, list: if isAdmin() || isOwner(resource.data);
+
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && attemptId.matches('^' + request.auth.uid + '_.*$')
+                        && request.resource.data.userId == request.auth.uid);
+
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && attemptId.matches('^' + request.auth.uid + '_.*$')
+                        && resource.data.userId == request.auth.uid
+                        && request.resource.data.userId == request.auth.uid);
+
+      allow delete: if isAdmin()
+                    || (isSignedIn()
+                        && attemptId.matches('^' + request.auth.uid + '_.*$')
+                        && resource.data.userId == request.auth.uid);
+    }
+
+    // -----------------------------------------------------
+    // COURSE COMPLETIONS
+    // -----------------------------------------------------
+    match /courseCompletions/{completionId} {
+      allow get, list: if isAdmin() || isOwner(resource.data);
+
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && completionId == request.auth.uid + "_" + request.resource.data.courseId
+                        && request.resource.data.userId == request.auth.uid);
+
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && completionId == request.auth.uid + "_" + resource.data.courseId
+                        && resource.data.userId == request.auth.uid
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.courseId == resource.data.courseId);
+
+      allow delete: if isAdmin()
+                    || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // -----------------------------------------------------
+    // CERTIFICATES
+    // -----------------------------------------------------
+    match /certificates/{certificateId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // -----------------------------------------------------
+    // USERS
+    // -----------------------------------------------------
+    match /users/{userId} {
+      allow read, create, update, delete: if isAdmin()
+        || (isSignedIn() && request.auth.uid == userId);
+    }
+
+    // -----------------------------------------------------
+    // ORDERS / PAYMENTS
+    // -----------------------------------------------------
+    match /orders/{orderId} {
+      allow get, list: if isAdmin() || isOwner(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // -----------------------------------------------------
     // DISCOUNT COUPONS
-    // =====================================================
-
+    // -----------------------------------------------------
     match /coupons/{couponId} {
-
-      // Coupon configuration is private admin data. The checkout API reads
-      // coupons through the trusted server instead of exposing them to clients.
       allow read, create, update, delete: if isAdmin();
     }
 
-
-    // =====================================================
-    // DEFAULT SECURITY
-    // =====================================================
-
-    // SAME OLD LOGIC:
-    //
-    // Authenticated users -> READ
-    // Anonymous users      -> NO READ
-    // Admin                -> WRITE
-    //
-    // This preserves your previous default behavior for collections that do
-    // not have a more specific rule above.
-
+    // -----------------------------------------------------
+    // DEFAULT DENY
+    // -----------------------------------------------------
+    // Every collection must have an explicit rule above. This prevents a
+    // newly-added collection from accidentally becoming readable to every
+    // authenticated user or writable by an untrusted client.
     match /{document=**} {
-
-      allow read: if isSignedIn();
-
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }
