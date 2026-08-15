@@ -17,24 +17,13 @@ import {
 } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase";
+import CourseThumbnail from "../components/CourseThumbnail";
 
 function money(value) { return `Rs. ${Number(value || 0).toLocaleString()}`; }
-
-function getCourseImage(course) {
-  if (course?.imageUrl || course?.image || course?.thumbnail) return course.imageUrl || course.image || course.thumbnail;
-  const firstLessonThumbnail = Array.isArray(course?.lessons)
-    ? course.lessons.find((lesson) => lesson?.thumbnailUrl || lesson?.thumbnail)?.thumbnailUrl || course.lessons.find((lesson) => lesson?.thumbnail)?.thumbnail
-    : "";
-  return firstLessonThumbnail || "";
-}
-
-function safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
+function safeArray(value) { return Array.isArray(value) ? value : []; }
 
 function CourseCard({ course, user, favorite, onToggleFavorite }) {
   const title = course.title || course.name || "Untitled Course";
-  const image = getCourseImage(course);
   const price = Number(course.price || 0);
   const oldPrice = Number(course.oldPrice || 0);
   const paid = course.isPaid === true || price > 0;
@@ -42,7 +31,7 @@ function CourseCard({ course, user, favorite, onToggleFavorite }) {
 
   return <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
-      {image ? <img src={image} alt={title} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800"><BookOpen size={54} className="text-white/90" /></div>}
+      <CourseThumbnail course={course} />
       {paid && <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-blue-700 shadow-sm">{money(price)}</span>}
       {discount > 0 && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-black text-white"><BadgePercent size={14} />{discount}% OFF</span>}
       <button type="button" onClick={() => onToggleFavorite(course.id)} className={`absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition ${favorite ? "border-red-200 bg-white text-red-500" : "border-white/40 bg-slate-950/60 text-white hover:bg-white hover:text-red-500"}`} aria-label={favorite ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`} aria-pressed={favorite} title={favorite ? "Remove from wishlist" : "Add to wishlist"}>
