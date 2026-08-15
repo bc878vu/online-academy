@@ -1,0 +1,21 @@
+{
+  "name": "Online Academy",
+  "short_name": "Online Academy",
+  "description": "Learn practical skills through structured courses, assessments, progress tracking and certificates.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f9fc",
+  "theme_color": "#2563eb",
+  "lang": "en-PK",
+  "categories": ["education", "learning"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
