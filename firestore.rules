@@ -2,138 +2,62 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1"; }
+    function isOwner(data) { return isSignedIn() && data.userId == request.auth.uid; }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn()
-        && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1";
-    }
-
-    function isOwner(data) {
-      return isSignedIn() && data.userId == request.auth.uid;
-    }
-
-    // -----------------------------------------------------
-    // COURSES
-    // -----------------------------------------------------
     match /courses/{courseId} {
       allow get, list: if isAdmin() || resource.data.published == true;
       allow create, update, delete: if isAdmin();
     }
 
-    // -----------------------------------------------------
-    // LESSON PROGRESS / ATTENDANCE
-    // Querying by userId is supported because the rule is based on
-    // resource.data.userId rather than only the document-id prefix.
-    // -----------------------------------------------------
     match /lessonProgress/{progressId} {
       allow get, list: if isAdmin() || isOwner(resource.data);
-
-      allow create: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$')
-                        && request.resource.data.userId == request.auth.uid);
-
-      allow update: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$')
-                        && resource.data.userId == request.auth.uid
-                        && request.resource.data.userId == request.auth.uid);
-
-      allow delete: if isAdmin()
-                    || (isSignedIn()
-                        && progressId.matches('^' + request.auth.uid + '_.*$')
-                        && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && progressId.matches('^' + request.auth.uid + '_.*$') && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && progressId.matches('^' + request.auth.uid + '_.*$') && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // -----------------------------------------------------
-    // ASSESSMENT ATTEMPTS
-    // -----------------------------------------------------
     match /assessmentAttempts/{attemptId} {
       allow get, list: if isAdmin() || isOwner(resource.data);
-
-      allow create: if isAdmin()
-                    || (isSignedIn()
-                        && attemptId.matches('^' + request.auth.uid + '_.*$')
-                        && request.resource.data.userId == request.auth.uid);
-
-      allow update: if isAdmin()
-                    || (isSignedIn()
-                        && attemptId.matches('^' + request.auth.uid + '_.*$')
-                        && resource.data.userId == request.auth.uid
-                        && request.resource.data.userId == request.auth.uid);
-
-      allow delete: if isAdmin()
-                    || (isSignedIn()
-                        && attemptId.matches('^' + request.auth.uid + '_.*$')
-                        && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && attemptId.matches('^' + request.auth.uid + '_.*$') && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && attemptId.matches('^' + request.auth.uid + '_.*$') && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // -----------------------------------------------------
-    // COURSE COMPLETIONS
-    // -----------------------------------------------------
     match /courseCompletions/{completionId} {
       allow get, list: if isAdmin() || isOwner(resource.data);
-
-      allow create: if isAdmin()
-                    || (isSignedIn()
-                        && completionId == request.auth.uid + "_" + request.resource.data.courseId
-                        && request.resource.data.userId == request.auth.uid);
-
-      allow update: if isAdmin()
-                    || (isSignedIn()
-                        && completionId == request.auth.uid + "_" + resource.data.courseId
-                        && resource.data.userId == request.auth.uid
-                        && request.resource.data.userId == request.auth.uid
-                        && request.resource.data.courseId == resource.data.courseId);
-
-      allow delete: if isAdmin()
-                    || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && completionId == request.auth.uid + "_" + request.resource.data.courseId && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && completionId == request.auth.uid + "_" + resource.data.courseId && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid && request.resource.data.courseId == resource.data.courseId);
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // -----------------------------------------------------
-    // CERTIFICATES
-    // -----------------------------------------------------
+    match /certificateRequests/{requestId} {
+      allow get, list: if isAdmin() || isOwner(resource.data);
+      allow create: if isAdmin() || (isSignedIn() && requestId == request.auth.uid + "_" + request.resource.data.courseId && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && requestId == request.auth.uid + "_" + resource.data.courseId && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid && request.resource.data.courseId == resource.data.courseId);
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
     match /certificates/{certificateId} {
       allow get: if true;
       allow list: if false;
       allow create, update, delete: if isAdmin();
     }
 
-    // -----------------------------------------------------
-    // USERS
-    // -----------------------------------------------------
     match /users/{userId} {
-      allow read, create, update, delete: if isAdmin()
-        || (isSignedIn() && request.auth.uid == userId);
+      allow read, create, update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
     }
 
-    // -----------------------------------------------------
-    // ORDERS / PAYMENTS
-    // -----------------------------------------------------
     match /orders/{orderId} {
       allow get, list: if isAdmin() || isOwner(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
-    // -----------------------------------------------------
-    // DISCOUNT COUPONS
-    // -----------------------------------------------------
     match /coupons/{couponId} {
       allow read, create, update, delete: if isAdmin();
     }
 
-    // -----------------------------------------------------
-    // DEFAULT DENY
-    // -----------------------------------------------------
-    // Every collection must have an explicit rule above. This prevents a
-    // newly-added collection from accidentally becoming readable to every
-    // authenticated user or writable by an untrusted client.
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }
