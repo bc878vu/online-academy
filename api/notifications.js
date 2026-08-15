@@ -4,6 +4,8 @@ import { listAuthUsers } from "./_identity.js";
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const RESEND_URL = "https://api.resend.com/emails/batch";
 const MAX_BATCH = 100;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RESERVED_EMAIL_DOMAINS = new Set(["example.com", "example.org", "example.net", "localhost", "invalid", "test"]);
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -14,6 +16,15 @@ function json(res, status, body) {
 
 function escapeHtml(value = "") {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+function isDeliverableEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return false;
+  const domain = email.split("@").pop() || "";
+  if (RESERVED_EMAIL_DOMAINS.has(domain)) return false;
+  if (domain.endsWith(".invalid") || domain.endsWith(".test") || domain.endsWith(".localhost")) return false;
+  return true;
 }
 
 function getFromAddress() {
@@ -36,7 +47,7 @@ async function getRecipients(audience) {
     id: String(user.localId || ""),
     email: String(user.email || "").trim().toLowerCase(),
     name: String(user.displayName || "Student").trim(),
-  })).filter((user) => user.id && user.email && user.email.includes("@") && user.id !== ADMIN_UID);
+  })).filter((user) => user.id && isDeliverableEmail(user.email) && user.id !== ADMIN_UID);
 
   if (audience === "all") return normalized;
 
