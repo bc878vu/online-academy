@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { db } from "../firebase";
 import AdminPromotionsPanel from "../components/AdminPromotionsPanel";
 import AdminUsers from "./AdminUsers";
+import AdminCreateUser from "./AdminCreateUser";
 
 export default function AdminCommerce() {
   const [searchParams] = useSearchParams();
@@ -26,7 +27,7 @@ export default function AdminCommerce() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (searchParams.get("view") === "users") return <AdminUsers />;
+  if (searchParams.get("view") === "users") return <><AdminUsers /><AdminCreateUser /></>;
 
   const update = (id, patch) => setCourses((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
 
