@@ -6,6 +6,7 @@ import "./index.css";
 import "./performance.css";
 import App from "./App.jsx";
 import AdminNotificationCenter from "./components/AdminNotificationCenter.jsx";
+import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
 
 // YouTube's IFrame API is intentionally NOT loaded here.
 // CourseDetails loads it only when a YouTube lesson is actually opened,
@@ -14,8 +15,10 @@ import AdminNotificationCenter from "./components/AdminNotificationCenter.jsx";
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
-      <AdminNotificationCenter />
+      <AppErrorBoundary>
+        <App />
+        <AdminNotificationCenter />
+      </AppErrorBoundary>
     </BrowserRouter>
   </StrictMode>
 );
