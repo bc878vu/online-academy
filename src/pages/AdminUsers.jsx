@@ -27,7 +27,7 @@ function initials(user) {
 async function adminRequest(action, body = {}) {
   const current = auth.currentUser;
   if (!current) throw new Error("Admin session expired. Please sign in again.");
-  const token = await current.getIdToken(true);
+  const token = await current.getIdToken();
   const response = await fetch("/api/admin-users", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -58,7 +58,7 @@ export default function AdminUsers() {
       isRefresh ? setRefreshing(true) : setLoading(true);
       const current = auth.currentUser;
       if (!current) throw new Error("Admin session expired. Please sign in again.");
-      const token = await current.getIdToken(true);
+      const token = await current.getIdToken();
       const response = await fetch("/api/admin-users?action=list", { headers: { Authorization: `Bearer ${token}` } });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Unable to load users");
