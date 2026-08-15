@@ -23,7 +23,7 @@ export default function AdminCreateUser() {
       if (!current) throw new Error("Admin session expired. Please sign in again.");
       if (form.password.length < 6) throw new Error("Password must be at least 6 characters.");
       setSaving(true);
-      const token = await current.getIdToken(true);
+      const token = await current.getIdToken();
       const response = await fetch("/api/admin-users", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
