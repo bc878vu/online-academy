@@ -1,5 +1,5 @@
 import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
-import { deleteAuthUser, listAuthUsers, sendPasswordReset, updateAuthUser } from "./_identity.js";
+import { createAuthUser, deleteAuthUser, listAuthUsers, sendPasswordReset, updateAuthUser } from "./_identity.js";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,6 +58,36 @@ async function listUsers() {
     .filter((user) => String(user.localId || "") && String(user.localId) !== ADMIN_UID)
     .map((user) => safeUser(user, paidMap.get(String(user.localId))?.size || 0))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+async function createUser(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const displayName = String(body.displayName || "").trim();
+  const photoUrl = String(body.photoUrl || "").trim();
+  const emailVerified = Boolean(body.emailVerified);
+  const disabled = Boolean(body.disabled);
+
+  if (!EMAIL_RE.test(email) || email.length > 254) throw Object.assign(new Error("Enter a valid email address"), { status: 400 });
+  if (password.length < 6) throw Object.assign(new Error("Password must be at least 6 characters"), { status: 400 });
+  if (displayName.length > 120) throw Object.assign(new Error("Name is too long"), { status: 400 });
+  if (photoUrl.length > 2048) throw Object.assign(new Error("Photo URL is too long"), { status: 400 });
+
+  const created = await createAuthUser({ email, password, displayName, photoUrl, emailVerified, disabled });
+  const id = String(created.localId || "");
+  if (!id) throw new Error("User was created but no user ID was returned");
+
+  await firestoreSet(`users/${id}`, {
+    displayName,
+    email,
+    photoUrl,
+    emailVerified,
+    disabled,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  return { ok: true, user: safeUser(created) };
 }
 
 async function updateUser(body) {
@@ -138,6 +168,7 @@ export default async function handler(req, res) {
 
     if (req.method === "GET" && action === "list") return json(res, 200, { ok: true, users: await listUsers() });
     if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
+    if (action === "create") return json(res, 201, await createUser(req.body || {}));
     if (action === "update") return json(res, 200, await updateUser(req.body || {}));
     if (action === "resetPassword") return json(res, 200, await resetPassword(req.body || {}));
     if (action === "delete") return json(res, 200, await deleteUser(req.body || {}));
