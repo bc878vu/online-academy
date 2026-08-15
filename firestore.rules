@@ -5,6 +5,12 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return isSignedIn() && request.auth.uid == "CDwCqUitlaSHEVeWQufCb0lXzMx1"; }
     function isOwner(data) { return isSignedIn() && data.userId == request.auth.uid; }
+    function validPublicMessage() {
+      return request.resource.data.honeypot == ""
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 8
+        && request.resource.data.message.size() <= 2000;
+    }
 
     match /courses/{courseId} {
       allow get, list: if isAdmin() || resource.data.published == true;
@@ -56,6 +62,26 @@ service cloud.firestore {
 
     match /coupons/{couponId} {
       allow read, create, update, delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.rating is number && request.resource.data.rating >= 1 && request.resource.data.rating <= 5 && request.resource.data.review is string && request.resource.data.review.size() >= 8 && request.resource.data.review.size() <= 1200;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /contactMessages/{messageId} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if validPublicMessage();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /feedback/{feedbackId} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if validPublicMessage();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /{document=**} { allow read, write: if false; }
