@@ -1,114 +1,208 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { MessageCircle, Star, X, Heart, ShieldCheck, Inbox, Send, RefreshCw } from "lucide-react";
+import { Heart, Inbox, MessageCircle, RefreshCw, Send, ShieldCheck, Star, X } from "lucide-react";
 import { auth, db } from "../firebase";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
-const tabs = ["Reviews", "Contact", "Feedback"];
-const safeText = (value, max) => String(value || "").trim().slice(0, max);
-function Stars({ value = 0, onChange, readOnly = false }) { return <div className="flex items-center gap-1" aria-label={`${value} out of 5 stars`}>{[1,2,3,4,5].map((n) => <button key={n} type="button" disabled={readOnly} onClick={() => onChange?.(n)} aria-label={`${n} star${n > 1 ? "s" : ""}`} className={`transition ${n <= value ? "text-amber-400" : "text-slate-300"} ${readOnly ? "cursor-default" : "hover:scale-110"}`}><Star size={18} fill="currentColor" /></button>)}</div>; }
-function Field({ label, ...props }) { return <label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">{label}</span><input {...props} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" /></label>; }
-function sortNewest(list) { return [...list].sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); }
+const TABS = ["Reviews", "Contact", "Feedback"];
+const safeText = (value, max) => String(value ?? "").trim().slice(0, max);
+
+function Stars({ value = 0, onChange, readOnly = false, size = 19 }) {
+  const current = Number(value) || 0;
+  return (
+    <div role="radiogroup" aria-label={`${current} out of 5 stars`} className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" role="radio" aria-checked={n === current} aria-label={`Rate ${n} out of 5`} disabled={readOnly}
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!readOnly) onChange?.(n); }}
+          className={`touch-manipulation rounded-lg p-1 transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${n <= current ? "text-amber-400" : "text-slate-300"} ${readOnly ? "cursor-default" : "cursor-pointer hover:scale-110 active:scale-95"}`}>
+          <Star size={size} fill="currentColor" strokeWidth={2.2} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, ...props }) {
+  return <label className="block"><span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><input {...props} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" /></label>;
+}
+
+const sortNewest = (items) => [...items].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
 export default function UserEngagementHub() {
-  const [open,setOpen] = useState(false), [tab,setTab] = useState("Reviews"), [user,setUser] = useState(undefined);
-  const [courses,setCourses] = useState([]), [reviews,setReviews] = useState([]), [adminItems,setAdminItems] = useState([]);
-  const [courseId,setCourseId] = useState(""), [rating,setRating] = useState(5), [reviewText,setReviewText] = useState("");
-  const [name,setName] = useState(""), [email,setEmail] = useState(""), [subject,setSubject] = useState(""), [message,setMessage] = useState("");
-  const [feedbackType,setFeedbackType] = useState("Suggestion"), [feedbackText,setFeedbackText] = useState("");
-  const [status,setStatus] = useState(""), [sending,setSending] = useState(false), [adminMode,setAdminMode] = useState(false), [loading,setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState("Reviews");
+  const [user, setUser] = useState(undefined);
+  const [courses, setCourses] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [adminItems, setAdminItems] = useState([]);
+  const [courseId, setCourseId] = useState("");
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [feedbackType, setFeedbackType] = useState("Suggestion");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [status, setStatus] = useState({ type: "", text: "" });
+  const [sending, setSending] = useState(false);
+  const [adminMode, setAdminMode] = useState(false);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
   const isAdmin = user?.uid === ADMIN_UID;
-  useEffect(() => onAuthStateChanged(auth,(u) => setUser(u || null)),[]);
 
-  const loadPublic = async () => {
-    setLoading(true);
+  useEffect(() => onAuthStateChanged(auth, (u) => setUser(u || null)), []);
+  useEffect(() => {
+    if (!user) return;
+    setName((current) => current || user.displayName || "");
+    setEmail((current) => current || user.email || "");
+  }, [user]);
+
+  const loadCourses = useCallback(async () => {
+    setLoadingCourses(true);
     try {
-      const [courseSnap,reviewSnap] = await Promise.all([
-        getDocs(query(collection(db,"courses"),where("published","==",true),limit(40))),
-        getDocs(query(collection(db,"reviews"),where("status","==","published"),limit(30))),
-      ]);
-      setCourses(courseSnap.docs.map((d) => ({id:d.id,...d.data()})));
-      setReviews(sortNewest(reviewSnap.docs.map((d) => ({id:d.id,...d.data()}))));
-    } catch (error) { console.warn("Engagement data unavailable",error); setReviews([]); }
-    finally { setLoading(false); }
-  };
-  const loadAdmin = async () => {
+      const snap = await getDocs(query(collection(db, "courses"), where("published", "==", true), limit(40)));
+      const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setCourses(next);
+      if (!courseId && next[0]) setCourseId(next[0].id);
+    } catch (error) { console.warn("Public course list unavailable", error); }
+    finally { setLoadingCourses(false); }
+  }, [courseId]);
+
+  const loadReviews = useCallback(async () => {
+    setLoadingReviews(true);
+    try {
+      const snap = await getDocs(query(collection(db, "reviews"), where("status", "==", "published"), limit(30)));
+      setReviews(sortNewest(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    } catch (error) {
+      console.warn("Public reviews unavailable", error);
+      setReviews([]);
+    } finally { setLoadingReviews(false); }
+  }, []);
+
+  const loadPublic = useCallback(async () => { await Promise.allSettled([loadCourses(), loadReviews()]); }, [loadCourses, loadReviews]);
+
+  const loadAdmin = useCallback(async () => {
     if (!isAdmin) return;
+    setLoadingAdmin(true);
     try {
-      const [c,f,r] = await Promise.all([
-        getDocs(query(collection(db,"contactMessages"),limit(50))),
-        getDocs(query(collection(db,"feedback"),limit(50))),
-        getDocs(query(collection(db,"reviews"),limit(50))),
+      const [contacts, feedback, reviewSnap] = await Promise.all([
+        getDocs(query(collection(db, "contactMessages"), limit(50))),
+        getDocs(query(collection(db, "feedback"), limit(50))),
+        getDocs(query(collection(db, "reviews"), limit(50))),
       ]);
       setAdminItems(sortNewest([
-        ...c.docs.map((d) => ({id:d.id,kind:"Contact",...d.data()})),
-        ...f.docs.map((d) => ({id:d.id,kind:"Feedback",...d.data()})),
-        ...r.docs.map((d) => ({id:d.id,kind:"Review",...d.data()})),
+        ...contacts.docs.map((d) => ({ id: d.id, kind: "Contact", ...d.data() })),
+        ...feedback.docs.map((d) => ({ id: d.id, kind: "Feedback", ...d.data() })),
+        ...reviewSnap.docs.map((d) => ({ id: d.id, kind: "Review", ...d.data() })),
       ]));
-    } catch (error) { setStatus(error?.message || "Unable to load admin inbox."); }
-  };
-  useEffect(() => { if (open) loadPublic(); }, [open]);
-  useEffect(() => { if (open && adminMode) loadAdmin(); }, [open,adminMode,isAdmin]);
+    } catch (error) { setStatus({ type: "error", text: error?.message || "Unable to load admin inbox." }); }
+    finally { setLoadingAdmin(false); }
+  }, [isAdmin]);
 
-  const averages = useMemo(() => reviews.length ? (reviews.reduce((sum,r) => sum + Number(r.rating || 0),0) / reviews.length).toFixed(1) : "",[reviews]);
-  const selectedCourse = courses.find((c) => c.id === courseId);
-  const close = () => { setOpen(false); setAdminMode(false); setStatus(""); };
+  useEffect(() => { if (open) void loadPublic(); }, [open, loadPublic]);
+  useEffect(() => { if (open && adminMode) void loadAdmin(); }, [open, adminMode, loadAdmin]);
+
+  const averages = useMemo(() => reviews.length ? (reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviews.length).toFixed(1) : "", [reviews]);
+  const selectedCourse = courses.find((course) => course.id === courseId);
+  const close = () => { setOpen(false); setAdminMode(false); setStatus({ type: "", text: "" }); };
 
   const submit = async () => {
     if (sending) return;
-    setSending(true); setStatus("");
+    setSending(true); setStatus({ type: "", text: "" });
     try {
       if (tab === "Reviews") {
         if (!user) throw new Error("Please login to submit a review.");
         if (!courseId) throw new Error("Select a course first.");
-        if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) throw new Error("Please select a rating from 1 to 5.");
+        if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) throw new Error("Please select 1–5 stars.");
         if (reviewText.trim().length < 8) throw new Error("Please write at least 8 characters in your review.");
-        const reviewId = `${user.uid}_${courseId}`;
-        const reviewRef = doc(db,"reviews",reviewId);
+        const reviewRef = doc(db, "reviews", `${user.uid}_${courseId}`);
         const existing = await getDoc(reviewRef);
+        const base = { rating: Number(rating), review: safeText(reviewText, 1200), updatedAt: serverTimestamp() };
         if (existing.exists()) {
-          await updateDoc(reviewRef,{rating:Number(rating),review:safeText(reviewText,1200),updatedAt:serverTimestamp()});
-          setStatus("Review updated successfully.");
+          await updateDoc(reviewRef, base);
+          setStatus({ type: "success", text: "Review updated successfully." });
         } else {
-          await setDoc(reviewRef,{userId:user.uid,userName:safeText(user.displayName || "Student",80),courseId,courseTitle:safeText(selectedCourse?.title || "Course",160),rating:Number(rating),review:safeText(reviewText,1200),status:"published",verified:false,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
-          setStatus("Review published successfully.");
+          await setDoc(reviewRef, { userId: user.uid, userName: safeText(user.displayName || "Student", 80), courseId, courseTitle: safeText(selectedCourse?.title || "Course", 160), ...base, status: "published", verified: false, createdAt: serverTimestamp() });
+          setStatus({ type: "success", text: "Review published successfully." });
         }
-        setReviewText(""); await loadPublic();
+        setReviewText("");
+        await loadReviews();
       } else if (tab === "Contact") {
         if (subject.trim().length < 3 || message.trim().length < 10) throw new Error("Please enter a subject and a detailed message.");
-        await addDoc(collection(db,"contactMessages"),{userId:user?.uid || null,name:safeText(name || user?.displayName || "Visitor",80),email:safeText(email || user?.email || "",160),subject:safeText(subject,160),message:safeText(message,2000),status:"new",honeypot:"",createdAt:serverTimestamp()});
-        setStatus("Message sent successfully. Our team can follow up with you."); setSubject(""); setMessage("");
+        await addDoc(collection(db, "contactMessages"), { userId: user?.uid || null, name: safeText(name || user?.displayName || "Visitor", 80), email: safeText(email || user?.email || "", 160), subject: safeText(subject, 160), message: safeText(message, 2000), status: "new", honeypot: "", createdAt: serverTimestamp() });
+        setStatus({ type: "success", text: "Message sent successfully. Our team can follow up with you." });
+        setSubject(""); setMessage("");
       } else {
         if (feedbackText.trim().length < 8) throw new Error("Please describe your feedback in at least 8 characters.");
-        await addDoc(collection(db,"feedback"),{userId:user?.uid || null,name:safeText(name || user?.displayName || "Visitor",80),email:safeText(email || user?.email || "",160),type:safeText(feedbackType,40),message:safeText(feedbackText,2000),status:"new",honeypot:"",createdAt:serverTimestamp()});
-        setStatus("Feedback received — thank you for helping improve Online Academy."); setFeedbackText("");
+        await addDoc(collection(db, "feedback"), { userId: user?.uid || null, name: safeText(name || user?.displayName || "Visitor", 80), email: safeText(email || user?.email || "", 160), type: safeText(feedbackType, 40), message: safeText(feedbackText, 2000), status: "new", honeypot: "", createdAt: serverTimestamp() });
+        setStatus({ type: "success", text: "Feedback received — thank you for helping improve Online Academy." });
+        setFeedbackText("");
       }
-    } catch (error) { setStatus(error?.message || "Something went wrong. Please try again."); }
+    } catch (error) { setStatus({ type: "error", text: error?.message || "Something went wrong. Please try again." }); }
     finally { setSending(false); }
   };
 
-  const setItemStatus = async (item,next) => {
+  const setItemStatus = async (item, next) => {
     if (!isAdmin) return;
     const collectionName = item.kind === "Contact" ? "contactMessages" : item.kind === "Feedback" ? "feedback" : "reviews";
     try {
-      await updateDoc(doc(db,collectionName,item.id),{status:next,updatedAt:serverTimestamp()});
-      setAdminItems((items) => items.map((x) => x.id === item.id && x.kind === item.kind ? {...x,status:next} : x));
-      if (collectionName === "reviews") await loadPublic();
-    } catch (error) { setStatus(error?.message || "Unable to update status."); }
+      await updateDoc(doc(db, collectionName, item.id), { status: next, updatedAt: serverTimestamp() });
+      setAdminItems((items) => items.map((x) => x.id === item.id && x.kind === item.kind ? { ...x, status: next } : x));
+      if (collectionName === "reviews") await loadReviews();
+    } catch (error) { setStatus({ type: "error", text: error?.message || "Unable to update status." }); }
   };
 
   return <>
-    <button type="button" onClick={() => {setOpen(true);setTab("Reviews");setAdminMode(false);}} aria-label="Open reviews, contact and feedback" className="fixed bottom-5 right-5 z-[80] flex h-14 items-center gap-2 rounded-2xl border border-white/30 bg-slate-950 px-4 text-sm font-black text-white shadow-2xl shadow-slate-950/25 transition hover:-translate-y-1 hover:bg-blue-700"><MessageCircle size={20}/><span className="hidden sm:inline">Reviews & Support</span></button>
-    {open && <div className="fixed inset-0 z-[90] flex items-end justify-end bg-slate-950/45 p-0 backdrop-blur-sm sm:p-5"><button type="button" className="absolute inset-0 cursor-default" aria-label="Close support" onClick={close}/><section className="relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/20 bg-slate-50 shadow-2xl sm:max-w-2xl sm:rounded-3xl" role="dialog" aria-modal="true" aria-label="Community and support">
-      <header className="flex shrink-0 items-center justify-between bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-5 py-5 text-white"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Online Academy</p><h2 className="mt-1 text-xl font-black">Community & Support</h2></div><button type="button" onClick={close} className="rounded-xl bg-white/15 p-2 hover:bg-white/25" aria-label="Close"><X size={20}/></button></header>
-      <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-3"><div className="flex min-w-max gap-1 py-2">{tabs.map((t) => <button key={t} type="button" onClick={() => {setTab(t);setAdminMode(false);setStatus("");}} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === t && !adminMode ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{t}</button>)}{isAdmin && <button type="button" onClick={() => setAdminMode(true)} className={`rounded-xl px-4 py-2.5 text-sm font-black ${adminMode ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Inbox size={15} className="mr-1 inline"/> Admin Inbox</button>}</div></div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{status && <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-800">{status}</div>}
-        {adminMode ? <div className="space-y-3"><div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4"><div><p className="text-sm font-black text-slate-900">Incoming messages</p><p className="mt-1 text-xs text-slate-500">Reviews, contact requests and feedback.</p></div><button type="button" onClick={loadAdmin} className="rounded-xl border border-slate-200 p-2 text-slate-600" aria-label="Refresh inbox"><RefreshCw size={17}/></button></div>{adminItems.map((item) => <article key={`${item.kind}-${item.id}`} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">{item.kind}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">{item.status || "new"}</span></div><h3 className="mt-2 font-black text-slate-900">{item.subject || item.courseTitle || item.type || "User message"}</h3>{item.rating && <Stars value={Number(item.rating)} readOnly/>}<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.message || item.review || ""}</p><p className="mt-2 text-xs text-slate-400">{item.name || item.userName || "User"}{item.email ? ` • ${item.email}` : ""}</p></div><select value={item.status || "new"} onChange={(e) => setItemStatus(item,e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold"><option value="new">New</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option><option value="published">Published</option><option value="hidden">Hidden</option></select></div></article>)}{!adminItems.length && <p className="py-12 text-center text-sm text-slate-500">No messages yet.</p>}</div> : tab === "Reviews" ? <div className="space-y-5">
-          <div className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-3xl font-black text-slate-950">{averages || "—"}</p><Stars value={Math.round(Number(averages) || 0)} readOnly/><p className="mt-1 text-xs text-slate-500">{reviews.length} public review{reviews.length === 1 ? "" : "s"}</p></div><Heart className="text-rose-500" fill="currentColor"/></div></div>
-          {loading ? <div className="flex items-center justify-center py-12 text-sm font-bold text-slate-500"><RefreshCw className="mr-2 animate-spin" size={18}/>Loading reviews...</div> : <div className="space-y-3">{reviews.slice(0,8).map((r) => <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xs font-black text-blue-700">{(r.userName || "S").slice(0,1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-black text-slate-900">{r.userName || "Student"}</p>{r.verified && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600"><ShieldCheck size={12}/> Verified learner</span>}</div><Stars value={Number(r.rating) || 0} readOnly/><p className="mt-2 text-sm leading-6 text-slate-600">{r.review}</p><p className="mt-2 text-[11px] font-bold text-slate-400">{r.courseTitle || "Online Academy"}</p></div></div></article>)}{!reviews.length && <p className="py-8 text-center text-sm text-slate-500">Be the first learner to leave a review.</p>}</div>}
-          {user ? <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><p className="font-black text-slate-900">Share your experience</p><div className="mt-3 space-y-3"><select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold"><option value="">Select course</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.title || "Course"}</option>)}</select><Stars value={rating} onChange={setRating}/><textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} maxLength={1200} placeholder="What did you like? What could be better?" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400"/><div className="flex items-center justify-between text-[11px] text-slate-400"><span>One review per course</span><span>{reviewText.length}/1200</span></div><button type="button" disabled={sending} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"><Star size={16}/>{sending ? "Saving..." : "Publish Review"}</button></div></div> : <p className="rounded-2xl bg-slate-100 p-4 text-sm font-semibold text-slate-600">Login to share a course review.</p>}
-        </div> : <div className="space-y-4"><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="font-black text-slate-900">{tab === "Contact" ? "Contact our team" : "Help us improve"}</p><p className="mt-1 text-sm leading-6 text-slate-500">{tab === "Contact" ? "Questions about courses, payments, certificates or your account? Send us a message." : "Found a bug, have an idea, or want to suggest a feature? Tell us."}</p></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name"/><Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email"/></div>{tab === "Contact" ? <><Field label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="How can we help?"/><label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">Message</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} rows={6} placeholder="Write your message..." className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400"/></label></> : <><label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">Type</span><select value={feedbackType} onChange={(e) => setFeedbackType(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold"><option>Suggestion</option><option>Bug report</option><option>Course content</option><option>Design / UX</option><option>Payment</option><option>Other</option></select></label><label className="block"><span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">Feedback</span><textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} maxLength={2000} rows={6} placeholder="Tell us what you think..." className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400"/></label></>}<button type="button" disabled={sending} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Send size={16}/>{sending ? "Sending..." : tab === "Contact" ? "Send Message" : "Send Feedback"}</button></div>}
-      </div></section></div>}
+    <button type="button" onClick={() => { setOpen(true); setTab("Reviews"); setAdminMode(false); setStatus({ type: "", text: "" }); }} aria-label="Open reviews, contact and feedback"
+      className="fixed bottom-4 right-4 z-[70] flex h-12 items-center gap-2 rounded-2xl border border-white/20 bg-slate-950 px-3.5 text-sm font-black text-white shadow-2xl shadow-slate-950/25 transition hover:-translate-y-0.5 hover:bg-blue-700 sm:bottom-5 sm:right-5 sm:h-14 sm:px-4">
+      <MessageCircle size={19} /><span className="hidden sm:inline">Reviews & Support</span>
+    </button>
+
+    {open && <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Close support" onClick={close} />
+      <section className="relative flex max-h-[calc(100dvh-8px)] w-full flex-col overflow-hidden rounded-t-3xl border border-white/20 bg-slate-50 shadow-2xl sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-3xl" role="dialog" aria-modal="true" aria-label="Community and support">
+        <header className="flex shrink-0 items-center justify-between bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-4 py-4 text-white sm:px-5 sm:py-5">
+          <div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-100">Online Academy</p><h2 className="mt-1 text-lg font-black sm:text-xl">Community & Support</h2></div>
+          <button type="button" onClick={close} className="rounded-xl bg-white/15 p-2 hover:bg-white/25" aria-label="Close"><X size={20} /></button>
+        </header>
+        <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-2"><div className="flex min-w-max gap-1 py-2">
+          {TABS.map((name) => <button key={name} type="button" onClick={() => { setTab(name); setAdminMode(false); setStatus({ type: "", text: "" }); }} className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-black transition ${tab === name && !adminMode ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>{name}</button>)}
+          {isAdmin && <button type="button" onClick={() => setAdminMode(true)} className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-black ${adminMode ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Inbox size={15} className="mr-1 inline" /> Admin Inbox</button>}
+        </div></div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
+          {status.text && <div className={`mb-4 rounded-2xl border p-3 text-sm font-bold ${status.type === "error" ? "border-red-100 bg-red-50 text-red-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}>{status.text}</div>}
+
+          {adminMode ? <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4"><div><p className="text-sm font-black text-slate-900">Incoming messages</p><p className="mt-1 text-xs text-slate-500">Reviews, contact requests and feedback.</p></div><button type="button" onClick={loadAdmin} disabled={loadingAdmin} className="rounded-xl border border-slate-200 p-2 text-slate-600 disabled:opacity-50" aria-label="Refresh inbox"><RefreshCw size={17} className={loadingAdmin ? "animate-spin" : ""} /></button></div>
+            {adminItems.map((item) => <article key={`${item.kind}-${item.id}`} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">{item.kind}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">{item.status || "new"}</span></div><h3 className="mt-2 font-black text-slate-900">{item.subject || item.courseTitle || item.type || "User message"}</h3>{item.rating && <Stars value={Number(item.rating)} readOnly size={16} />}<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.message || item.review || ""}</p><p className="mt-2 text-xs text-slate-400">{item.name || item.userName || "User"}{item.email ? ` • ${item.email}` : ""}</p></div><select value={item.status || "new"} onChange={(e) => setItemStatus(item, e.target.value)} className="max-w-[112px] rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold"><option value="new">New</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option><option value="published">Published</option><option value="hidden">Hidden</option></select></div></article>)}
+            {!adminItems.length && <p className="py-12 text-center text-sm text-slate-500">No messages yet.</p>}
+          </div> : tab === "Reviews" ? <div className="space-y-5">
+            <div className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-3xl font-black text-slate-950">{averages || "—"}</p><Stars value={Math.round(Number(averages) || 0)} readOnly /><p className="mt-1 text-xs text-slate-500">{reviews.length} public review{reviews.length === 1 ? "" : "s"}</p></div><Heart className="text-rose-500" fill="currentColor" /></div></div>
+            {loadingReviews ? <div className="flex items-center justify-center py-12 text-sm font-bold text-slate-500"><RefreshCw className="mr-2 animate-spin" size={18} /> Loading reviews...</div> : <div className="space-y-3">{reviews.slice(0, 8).map((r) => <article key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xs font-black text-blue-700">{(r.userName || "S").slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-black text-slate-900">{r.userName || "Student"}</p>{r.verified && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600"><ShieldCheck size={12} /> Verified learner</span>}</div><Stars value={Number(r.rating) || 0} readOnly size={17} /><p className="mt-2 text-sm leading-6 text-slate-600">{r.review}</p><p className="mt-2 text-[11px] font-bold text-slate-400">{r.courseTitle || "Online Academy"}</p></div></div></article>)}{!reviews.length && <p className="py-8 text-center text-sm text-slate-500">No public reviews are available yet.</p>}</div>}
+            {user ? <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"><p className="font-black text-slate-900">Share your experience</p><div className="mt-3 space-y-3">
+              <div><label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Course</label><select value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={loadingCourses} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold disabled:opacity-60"><option value="">{loadingCourses ? "Loading courses..." : "Select course"}</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.title || "Course"}</option>)}</select></div>
+              <div><p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Rating</p><Stars value={rating} onChange={setRating} size={22} /><p className="mt-1 text-xs font-semibold text-slate-500">{rating ? `${rating}/5 selected` : "Tap a star to rate"}</p></div>
+              <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} maxLength={1200} placeholder="What did you like? What could be better?" className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" />
+              <button type="button" onClick={submit} disabled={sending} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 disabled:cursor-not-allowed disabled:opacity-60">{sending ? "Saving..." : "Publish review"}</button>
+            </div></div> : <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-800">Login to share your course experience.</div>}
+          </div> : tab === "Contact" ? <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-black text-slate-900">Contact our team</h3><p className="mt-1 text-sm text-slate-500">Questions about courses, payments, certificates or your account? Send us a message.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2"><Field label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Your name" /><Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} placeholder="Your email" /></div>
+            <Field label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={160} placeholder="How can we help?" />
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={6} maxLength={2000} placeholder="Write your message..." className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" />
+            <button type="button" onClick={submit} disabled={sending} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 disabled:opacity-60 sm:w-auto">{sending ? "Sending..." : <><Send size={17} /> Send Message</>}</button>
+          </div> : <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-black text-slate-900">Help us improve</h3><p className="mt-1 text-sm text-slate-500">Found a bug, have an idea, or want to suggest a feature? Tell us.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2"><Field label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Your name" /><Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} placeholder="Your email" /></div>
+            <div><label className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Type</label><select value={feedbackType} onChange={(e) => setFeedbackType(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold"><option>Suggestion</option><option>Bug report</option><option>Course content</option><option>Design / UX</option><option>Payment</option><option>Other</option></select></div>
+            <textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} rows={6} maxLength={2000} placeholder="Tell us what you think..." className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" />
+            <button type="button" onClick={submit} disabled={sending} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 disabled:opacity-60 sm:w-auto">{sending ? "Sending..." : <><Send size={17} /> Send Feedback</>}</button>
+          </div>}
+        </div>
+      </section>
+    </div>}
   </>;
 }
