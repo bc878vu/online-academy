@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getConfig } from "./_firebase.js";
+import { getConfig, getIdentityAccessToken } from "./_firebase.js";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const IDENTITY_SCOPE = "https://www.googleapis.com/auth/identitytoolkit";
@@ -9,7 +9,7 @@ function base64Url(value) {
   return Buffer.from(value).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function getIdentityAccessToken() {
+async function getIdentityAccessTokenLegacy() {
   const { clientEmail, privateKey } = getConfig();
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
@@ -30,9 +30,15 @@ async function getIdentityAccessToken() {
   return data.access_token;
 }
 
+// Keep this module compatible with existing notification code while sharing
+// the hardened service-account token implementation used by the server APIs.
+async function adminToken() {
+  return getIdentityAccessToken ? getIdentityAccessToken() : getIdentityAccessTokenLegacy();
+}
+
 export async function listAuthUsers() {
   const { projectId } = getConfig();
-  const token = await getIdentityAccessToken();
+  const token = await adminToken();
   const users = [];
   const pageSize = 500;
 
@@ -47,12 +53,44 @@ export async function listAuthUsers() {
       throw new Error(`Identity Toolkit user query failed (${response.status}): ${detail.slice(0, 300)}`);
     }
     const data = await response.json();
-    // queryAccounts returns QueryUserInfoResponse.userInfo (JSON camelCase),
-    // not the Admin SDK listUsers() shape of `users`.
     const batch = Array.isArray(data.userInfo) ? data.userInfo : [];
     users.push(...batch);
     if (batch.length < pageSize) break;
   }
 
   return users;
+}
+
+async function projectAccountRequest(path, body) {
+  const { projectId } = getConfig();
+  const token = await adminToken();
+  const response = await fetch(`${IDENTITY_BASE}/projects/${encodeURIComponent(projectId)}/accounts:${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const error = new Error(`Identity Toolkit ${path} failed (${response.status}): ${detail.slice(0, 350)}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.status === 204 ? {} : response.json();
+}
+
+export async function updateAuthUser(localId, updates = {}) {
+  const payload = { localId: String(localId || "") };
+  if (!payload.localId) throw new Error("User ID is required");
+  if (Object.prototype.hasOwnProperty.call(updates, "displayName")) payload.displayName = String(updates.displayName || "").trim();
+  if (Object.prototype.hasOwnProperty.call(updates, "email")) payload.email = String(updates.email || "").trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(updates, "photoUrl")) payload.photoUrl = String(updates.photoUrl || "").trim();
+  if (Object.prototype.hasOwnProperty.call(updates, "emailVerified")) payload.emailVerified = Boolean(updates.emailVerified);
+  if (Object.prototype.hasOwnProperty.call(updates, "disabled")) payload.disableUser = Boolean(updates.disabled);
+  return projectAccountRequest("update", payload);
+}
+
+export async function deleteAuthUser(localId) {
+  const id = String(localId || "");
+  if (!id) throw new Error("User ID is required");
+  return projectAccountRequest("delete", { localId: id });
 }
