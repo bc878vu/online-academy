@@ -76,6 +76,38 @@ async function projectAccountRequest(path, body) {
   return response.status === 204 ? {} : response.json();
 }
 
+async function projectAccountsCreate(body) {
+  const { projectId } = getConfig();
+  const token = await adminToken();
+  const response = await fetch(`${IDENTITY_BASE}/projects/${encodeURIComponent(projectId)}/accounts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const error = new Error(`Identity Toolkit account creation failed (${response.status}): ${detail.slice(0, 350)}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+export async function createAuthUser({ email, password, displayName = "", photoUrl = "", emailVerified = false, disabled = false }) {
+  const address = String(email || "").trim().toLowerCase();
+  const secret = String(password || "");
+  if (!address || !secret) throw new Error("Email and password are required");
+  if (secret.length < 6) throw new Error("Password must be at least 6 characters");
+  return projectAccountsCreate({
+    email: address,
+    password: secret,
+    displayName: String(displayName || "").trim(),
+    photoUrl: String(photoUrl || "").trim(),
+    emailVerified: Boolean(emailVerified),
+    disabled: Boolean(disabled),
+  });
+}
+
 export async function updateAuthUser(localId, updates = {}) {
   const payload = { localId: String(localId || "") };
   if (!payload.localId) throw new Error("User ID is required");
