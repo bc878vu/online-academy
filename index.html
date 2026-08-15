@@ -2,15 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2563eb" />
     <meta name="color-scheme" content="light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Online Academy" />
     <title>Online Academy | Learn. Grow. Succeed.</title>
     <meta name="description" content="Online Academy offers structured online courses, lesson-based learning, progress tracking, and certificates in one simple learning platform." />
     <meta name="author" content="Online Academy" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://online-academy-plum.vercel.app/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Online Academy" />
     <meta property="og:title" content="Online Academy | Learn. Grow. Succeed." />
@@ -20,7 +26,7 @@
     <meta name="twitter:title" content="Online Academy | Learn. Grow. Succeed." />
     <meta name="twitter:description" content="Structured online courses, progress tracking, and certificates through Online Academy." />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"WebSite","name":"Online Academy","alternateName":"Online Academy Learning Platform","url":"https://online-academy-plum.vercel.app/"}
+      {"@context":"https://schema.org","@type":"WebSite","name":"Online Academy","alternateName":"Online Academy Learning Platform","url":"https://online-academy-plum.vercel.app/","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://online-academy-plum.vercel.app/courses?search={search_term_string}"},"query-input":"required name=search_term_string"}}
     </script>
     <style>
       /* Course thumbnails: preserve the complete artwork on every card/device. */
@@ -55,7 +61,6 @@
         max-width: 100% !important;
       }
 
-      /* Keep the custom controls attached to the bottom edge of the media. */
       section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 {
         bottom: 0 !important;
         width: 100% !important;
@@ -63,8 +68,6 @@
         box-sizing: border-box !important;
       }
 
-      /* Attendance status has a stable footprint. The save spinner is deliberately
-         hidden so a background Firestore write cannot make “Present” flicker. */
       section.bg-slate-950.shadow-2xl > div:last-child {
         min-height: 48px !important;
         box-sizing: border-box !important;
@@ -98,8 +101,6 @@
           padding: 34px 8px 8px !important;
         }
 
-        /* Mobile controls stay in a compact single bottom row instead of
-           expanding into the middle of the video. */
         section.bg-slate-950.shadow-2xl > div.relative.w-full > div.absolute.inset-x-0.bottom-0 > div.flex.flex-col {
           flex-direction: row !important;
           align-items: center !important;
