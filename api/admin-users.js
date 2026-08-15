@@ -1,5 +1,5 @@
 import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
-import { deleteAuthUser, listAuthUsers, updateAuthUser } from "./_identity.js";
+import { deleteAuthUser, listAuthUsers, sendPasswordReset, updateAuthUser } from "./_identity.js";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -100,6 +100,15 @@ async function updateUser(body) {
   return { ok: true, user: safeUser(updated) };
 }
 
+async function resetPassword(body) {
+  const id = String(body.userId || "").trim();
+  if (!id || id === ADMIN_UID) throw Object.assign(new Error("A valid learner account is required"), { status: 400 });
+  const user = (await listAuthUsers()).find((item) => String(item.localId) === id);
+  if (!user?.email) throw Object.assign(new Error("User does not have an email address"), { status: 400 });
+  await sendPasswordReset(user.email);
+  return { ok: true, email: user.email };
+}
+
 async function deleteUser(body) {
   const id = String(body.userId || "").trim();
   if (!id) throw Object.assign(new Error("User ID is required"), { status: 400 });
@@ -130,6 +139,7 @@ export default async function handler(req, res) {
     if (req.method === "GET" && action === "list") return json(res, 200, { ok: true, users: await listUsers() });
     if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
     if (action === "update") return json(res, 200, await updateUser(req.body || {}));
+    if (action === "resetPassword") return json(res, 200, await resetPassword(req.body || {}));
     if (action === "delete") return json(res, 200, await deleteUser(req.body || {}));
     return json(res, 400, { error: "Unknown user management action" });
   } catch (error) {
