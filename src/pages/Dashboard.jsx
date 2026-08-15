@@ -148,7 +148,9 @@ function Dashboard() {
 
     try {
       const [courseSnapshot, progressSnapshot] = await Promise.all([
-        getDocs(collection(db, "courses")),
+        // Firestore rules only allow public course listing when published == true.
+        // The previous unfiltered query was rejected when any unpublished course existed.
+        getDocs(query(collection(db, "courses"), where("published", "==", true))),
         user?.uid
           ? getDocs(query(collection(db, "lessonProgress"), where("userId", "==", user.uid)))
           : Promise.resolve({ docs: [] }),
