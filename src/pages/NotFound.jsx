@@ -1,8 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, Compass, Home, Search } from "lucide-react";
 
 export default function NotFound() {
   const location = useLocation();
+  const navigate = useNavigate();
   return <main className="flex min-h-[calc(100vh-150px)] items-center bg-[#f7f9fc] px-4 py-16 sm:px-6 lg:px-8">
     <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
       <div className="grid items-center gap-8 p-6 sm:p-10 lg:grid-cols-[.9fr_1.1fr] lg:p-14">
@@ -20,7 +21,7 @@ export default function NotFound() {
             <Link to="/" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"><Home size={17} /> Go Home</Link>
             <Link to="/courses" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"><BookOpen size={17} /> Browse Courses</Link>
           </div>
-          <Link to={-1} className="mt-4 inline-flex items-center gap-2 text-xs font-black text-slate-400 transition hover:text-blue-700"><ArrowLeft size={14} /> Go back</Link>
+          <button type="button" onClick={() => navigate(-1)} className="mt-4 inline-flex items-center gap-2 text-xs font-black text-slate-400 transition hover:text-blue-700"><ArrowLeft size={14} /> Go back</button>
         </div>
       </div>
     </div>
