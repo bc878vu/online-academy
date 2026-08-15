@@ -30,8 +30,6 @@ async function getIdentityAccessTokenLegacy() {
   return data.access_token;
 }
 
-// Keep this module compatible with existing notification code while sharing
-// the hardened service-account token implementation used by the server APIs.
 async function adminToken() {
   return getIdentityAccessToken ? getIdentityAccessToken() : getIdentityAccessTokenLegacy();
 }
@@ -93,4 +91,10 @@ export async function deleteAuthUser(localId) {
   const id = String(localId || "");
   if (!id) throw new Error("User ID is required");
   return projectAccountRequest("delete", { localId: id });
+}
+
+export async function sendPasswordReset(email) {
+  const address = String(email || "").trim().toLowerCase();
+  if (!address) throw new Error("User email is required");
+  return projectAccountRequest("sendOobCode", { requestType: "PASSWORD_RESET", email: address });
 }
