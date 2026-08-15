@@ -8,6 +8,7 @@ import {
   Star, Target, Users, X, Zap,
 } from "lucide-react";
 import { auth, db } from "../firebase";
+import CourseThumbnail from "../components/CourseThumbnail";
 import "./home-animations.css";
 
 const CACHE_KEY = "online_academy_home_courses_v4";
@@ -31,19 +32,8 @@ function coursePrice(course) { return Number(course?.price || 0); }
 function coursePaid(course) { return course?.isPaid === true || coursePrice(course) > 0; }
 function money(value) { return `Rs. ${Number(value || 0).toLocaleString()}`; }
 
-function courseImageSources(course) {
-  const values = [course?.imageUrl, course?.imageURL, course?.thumbnailUrl, course?.thumbnailURL, course?.thumbnail, course?.image, course?.courseImage, course?.coverImage, course?.bannerImage, course?.coverUrl, course?.bannerUrl];
-  if (Array.isArray(course?.lessons)) course.lessons.forEach((lesson) => values.push(lesson?.thumbnailUrl, lesson?.thumbnailURL, lesson?.thumbnail, lesson?.imageUrl, lesson?.image, lesson?.coverImage));
-  return [...new Set(values.map((value) => safeText(value)).filter(Boolean))];
-}
-
 function CourseImage({ course, priority = false }) {
-  const sources = useMemo(() => courseImageSources(course), [course]);
-  const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(0), [course?.id]);
-  const src = sources[index];
-  if (!src) return <div className="oa-image-fallback"><BookOpen size={46} /></div>;
-  return <img src={src} alt={courseTitle(course)} loading={priority ? "eager" : "lazy"} decoding="async" fetchPriority={priority ? "high" : "auto"} onError={() => setIndex((current) => current + 1)} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.045]" />;
+  return <CourseThumbnail course={course} priority={priority} />;
 }
 
 function FeaturedCard({ course, user, index }) {
