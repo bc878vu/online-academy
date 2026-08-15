@@ -39,31 +39,25 @@ export default function AdminNotificationCenter() {
     if (!admin) return undefined;
     previousPublished.current = new Map();
     initialized.current = false;
-
     const unsubscribe = onSnapshot(collection(db, "courses"), (snapshot) => {
       const current = new Map(previousPublished.current);
-
       if (!initialized.current) {
         snapshot.docs.forEach((item) => current.set(item.id, item.data()?.published === true));
         previousPublished.current = current;
         initialized.current = true;
         return;
       }
-
       snapshot.docChanges().forEach((change) => {
         const course = change.doc.data() || {};
         const wasPublished = current.get(change.doc.id) === true;
         const isPublished = course.published === true;
         current.set(change.doc.id, isPublished);
-
         if (isPublished && (!wasPublished || change.type === "added")) {
-          void callNotificationApi({ action: "courseLaunch", courseId: change.doc.id })
-            .catch((error) => console.error("Automatic course notification failed:", error));
+          void callNotificationApi({ action: "courseLaunch", courseId: change.doc.id }).catch((error) => console.error("Automatic course notification failed:", error));
         }
       });
       previousPublished.current = current;
     }, (error) => console.error("Course notification watcher failed:", error));
-
     return unsubscribe;
   }, [admin]);
 
@@ -77,21 +71,19 @@ export default function AdminNotificationCenter() {
     try {
       const result = await callNotificationApi({ action: "announcement", audience, subject, message, link });
       setStatus({ type: "ok", text: `Sent to ${result.sent || 0} users.` });
-      setSubject("");
-      setMessage("");
-      setLink("");
+      setSubject(""); setMessage(""); setLink("");
     } catch (error) {
       setStatus({ type: "error", text: error?.message || "Unable to send announcement." });
-    } finally {
-      setSending(false);
-    }
+    } finally { setSending(false); }
   };
 
   return <>
-    <button type="button" onClick={() => { setOpen(true); setStatus({ type: "", text: "" }); }} className="fixed bottom-5 right-5 z-[120] inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-900/30 transition hover:scale-105 hover:bg-blue-700" aria-label="Open admin notifications" title="Send notification"><Bell size={22} /></button>
+    <button type="button" onClick={() => { setOpen(true); setStatus({ type: "", text: "" }); }}
+      className="fixed bottom-20 right-4 z-[75] inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-900/30 transition hover:scale-105 hover:bg-blue-700 sm:bottom-5 sm:right-24 sm:h-14 sm:w-14"
+      aria-label="Open admin notifications" title="Send notification"><Bell size={21} /></button>
 
-    {open && <div className="fixed inset-0 z-[130] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm">
-      <div className="mx-auto mt-6 w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl sm:mt-12">
+    {open && <div className="fixed inset-0 z-[210] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm">
+      <div className="mx-auto mt-4 w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl sm:mt-12">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><div><p className="text-xs font-black uppercase tracking-[.16em] text-blue-600">Admin Notifications</p><h2 className="mt-1 text-xl font-black text-slate-950">Send email announcement</h2></div><button type="button" onClick={() => setOpen(false)} className="rounded-xl p-2 hover:bg-slate-100" aria-label="Close"><X /></button></div>
         <form onSubmit={sendAnnouncement} className="space-y-5 p-5 sm:p-6">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-slate-600"><div className="flex items-start gap-3"><Mail className="mt-0.5 shrink-0 text-blue-600" size={19} /><p><b className="text-slate-900">Automatic:</b> when a new published course is launched, all users receive an email automatically. This panel is for your own announcements and notes.</p></div></div>
