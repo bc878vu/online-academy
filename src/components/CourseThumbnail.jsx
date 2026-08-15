@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, GraduationCap, PlayCircle } from "lucide-react";
+import { PlayCircle } from "lucide-react";
+import "../pages/certificate.css";
 
 const text = (value) => {
   if (value == null) return "";
@@ -10,29 +11,8 @@ const text = (value) => {
 };
 
 const sourcesFor = (course) => {
-  const values = [
-    course?.imageUrl,
-    course?.imageURL,
-    course?.thumbnailUrl,
-    course?.thumbnailURL,
-    course?.thumbnail,
-    course?.image,
-    course?.courseImage,
-    course?.coverImage,
-    course?.bannerImage,
-    course?.coverUrl,
-    course?.bannerUrl,
-  ];
-  if (Array.isArray(course?.lessons)) {
-    course.lessons.forEach((lesson) => values.push(
-      lesson?.thumbnailUrl,
-      lesson?.thumbnailURL,
-      lesson?.thumbnail,
-      lesson?.imageUrl,
-      lesson?.image,
-      lesson?.coverImage,
-    ));
-  }
+  const values = [course?.imageUrl, course?.imageURL, course?.thumbnailUrl, course?.thumbnailURL, course?.thumbnail, course?.image, course?.courseImage, course?.coverImage, course?.bannerImage, course?.coverUrl, course?.bannerUrl];
+  if (Array.isArray(course?.lessons)) course.lessons.forEach((lesson) => values.push(lesson?.thumbnailUrl, lesson?.thumbnailURL, lesson?.thumbnail, lesson?.imageUrl, lesson?.image, lesson?.coverImage));
   return [...new Set(values.map(text).filter(Boolean))];
 };
 
@@ -50,24 +30,8 @@ export default function CourseThumbnail({ course, className = "", priority = fal
   const fallback = useMemo(() => fallbackDataUrl(course?.title || course?.name, course?.category), [course?.title, course?.name, course?.category]);
   const allSources = useMemo(() => [...sources, fallback], [sources, fallback]);
   const [index, setIndex] = useState(0);
-
   useEffect(() => setIndex(0), [course?.id, allSources.join("|")]);
-
-  return (
-    <div className={`relative h-full w-full overflow-hidden bg-slate-950 ${className}`}>
-      <img
-        src={allSources[index] || fallback}
-        alt={text(course?.title || course?.name) || "Online course"}
-        loading={priority ? "eager" : "lazy"}
-        decoding="async"
-        fetchPriority={priority ? "high" : "auto"}
-        onError={() => setIndex((current) => Math.min(current + 1, allSources.length - 1))}
-        className="h-full w-full object-cover transition duration-500"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent" />
-      {showPlay && <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-950/65 px-2.5 py-1 text-[10px] font-black text-white backdrop-blur-md"><PlayCircle size={12} /> Learn at your pace</span>}
-    </div>
-  );
+  return <div className={`relative h-full w-full overflow-hidden bg-slate-950 ${className}`}><img src={allSources[index] || fallback} alt={text(course?.title || course?.name) || "Online course"} loading={priority ? "eager" : "lazy"} decoding="async" fetchPriority={priority ? "high" : "auto"} onError={() => setIndex((current) => Math.min(current + 1, allSources.length - 1))} className="h-full w-full object-cover transition duration-500" /><div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent" />{showPlay && <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-slate-950/65 px-2.5 py-1 text-[10px] font-black text-white backdrop-blur-md"><PlayCircle size={12} /> Learn at your pace</span>}</div>;
 }
 
 export { fallbackDataUrl, sourcesFor };
