@@ -9,6 +9,7 @@ import AdminCreateUser from "./AdminCreateUser";
 
 export default function AdminCommerce() {
   const [searchParams] = useSearchParams();
+  const view = searchParams.get("view") || "commerce";
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
@@ -25,10 +26,17 @@ export default function AdminCommerce() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (view === "users" || view === "promotions") {
+      setLoading(false);
+      return undefined;
+    }
+    load();
+    return undefined;
+  }, [load, view]);
 
-  if (searchParams.get("view") === "users") return <><AdminUsers /><AdminCreateUser /></>;
-  if (searchParams.get("view") === "promotions") return <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-black uppercase tracking-wider text-indigo-600">Administration</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Offers & Promotions</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Create, schedule, edit, hide and delete website offers from one place.</p></div><Link to="/admin/commerce" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"><CreditCard size={17} /> Paid Courses</Link></div><AdminPromotionsPanel /></div></main>;
+  if (view === "users") return <main className="min-h-[calc(100vh-72px)] bg-slate-50"><AdminUsers /><AdminCreateUser /></main>;
+  if (view === "promotions") return <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-black uppercase tracking-wider text-indigo-600">Administration</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Offers & Promotions</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Create, schedule, edit, hide and delete website offers from one place.</p></div><Link to="/admin/commerce" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700"><CreditCard size={17} /> Paid Courses</Link></div><AdminPromotionsPanel /></div></main>;
 
   const update = (id, patch) => setCourses((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
 
