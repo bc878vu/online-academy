@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import "./index.css";
 import "./performance.css";
+import "./modern-upgrades.css";
 import App from "./App.jsx";
 import AdminNotificationCenter from "./components/AdminNotificationCenter.jsx";
 import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
