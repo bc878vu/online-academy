@@ -1,7 +1,7 @@
 import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
 import { createAuthUser, deleteAuthUser, listAuthUsers, sendPasswordReset, updateAuthUser } from "./_identity.js";
 
-const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
+const ADMIN_EMAIL = "admin@onlineacademy.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function json(res, status, body) {
@@ -11,12 +11,16 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function isPrimaryAdmin(user) {
+  return String(user?.email || "").trim().toLowerCase() === ADMIN_EMAIL;
+}
+
 async function requireAdmin(req) {
   const authHeader = String(req.headers.authorization || "");
   const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!idToken) throw Object.assign(new Error("Authentication required"), { status: 401 });
   const user = await verifyFirebaseIdToken(idToken);
-  if (user.localId !== ADMIN_UID) throw Object.assign(new Error("Admin access required"), { status: 403 });
+  if (!isPrimaryAdmin(user)) throw Object.assign(new Error("Admin access required"), { status: 403 });
   return user;
 }
 
@@ -55,7 +59,7 @@ async function listUsers() {
   }
 
   return authUsers
-    .filter((user) => String(user.localId || "") && String(user.localId) !== ADMIN_UID)
+    .filter((user) => String(user.localId || "") && !isPrimaryAdmin(user))
     .map((user) => safeUser(user, paidMap.get(String(user.localId))?.size || 0))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
@@ -69,6 +73,7 @@ async function createUser(body) {
   const disabled = Boolean(body.disabled);
 
   if (!EMAIL_RE.test(email) || email.length > 254) throw Object.assign(new Error("Enter a valid email address"), { status: 400 });
+  if (email === ADMIN_EMAIL) throw Object.assign(new Error("The primary administrator email cannot be created as a learner account"), { status: 400 });
   if (password.length < 6) throw Object.assign(new Error("Password must be at least 6 characters"), { status: 400 });
   if (displayName.length > 120) throw Object.assign(new Error("Name is too long"), { status: 400 });
   if (photoUrl.length > 2048) throw Object.assign(new Error("Photo URL is too long"), { status: 400 });
@@ -93,7 +98,11 @@ async function createUser(body) {
 async function updateUser(body) {
   const id = String(body.userId || "").trim();
   if (!id) throw Object.assign(new Error("User ID is required"), { status: 400 });
-  if (id === ADMIN_UID) throw Object.assign(new Error("The primary administrator cannot be changed here"), { status: 400 });
+
+  const allUsers = await listAuthUsers();
+  const target = allUsers.find((item) => String(item.localId || "") === id);
+  if (!target) throw Object.assign(new Error("User account not found"), { status: 404 });
+  if (isPrimaryAdmin(target)) throw Object.assign(new Error("The primary administrator cannot be changed here"), { status: 400 });
 
   const updates = {};
   if (Object.prototype.hasOwnProperty.call(body, "displayName")) {
@@ -104,6 +113,7 @@ async function updateUser(body) {
   if (Object.prototype.hasOwnProperty.call(body, "email")) {
     const email = String(body.email || "").trim().toLowerCase();
     if (!EMAIL_RE.test(email) || email.length > 254) throw Object.assign(new Error("Enter a valid email address"), { status: 400 });
+    if (email === ADMIN_EMAIL) throw Object.assign(new Error("The primary administrator email cannot be assigned to a learner"), { status: 400 });
     updates.email = email;
   }
   if (Object.prototype.hasOwnProperty.call(body, "photoUrl")) {
@@ -132,9 +142,9 @@ async function updateUser(body) {
 
 async function resetPassword(body) {
   const id = String(body.userId || "").trim();
-  if (!id || id === ADMIN_UID) throw Object.assign(new Error("A valid learner account is required"), { status: 400 });
+  if (!id) throw Object.assign(new Error("A valid learner account is required"), { status: 400 });
   const user = (await listAuthUsers()).find((item) => String(item.localId) === id);
-  if (!user?.email) throw Object.assign(new Error("User does not have an email address"), { status: 400 });
+  if (!user || isPrimaryAdmin(user) || !user.email) throw Object.assign(new Error("A valid learner account is required"), { status: 400 });
   await sendPasswordReset(user.email);
   return { ok: true, email: user.email };
 }
@@ -142,7 +152,9 @@ async function resetPassword(body) {
 async function deleteUser(body) {
   const id = String(body.userId || "").trim();
   if (!id) throw Object.assign(new Error("User ID is required"), { status: 400 });
-  if (id === ADMIN_UID) throw Object.assign(new Error("The primary administrator cannot be deleted"), { status: 400 });
+  const target = (await listAuthUsers()).find((item) => String(item.localId || "") === id);
+  if (!target) throw Object.assign(new Error("User account not found"), { status: 404 });
+  if (isPrimaryAdmin(target)) throw Object.assign(new Error("The primary administrator cannot be deleted"), { status: 400 });
 
   await deleteAuthUser(id);
 
