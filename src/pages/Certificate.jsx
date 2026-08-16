@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Award, CheckCircle2, Clock3, FileCheck2, GraduationCap, Loader2, Lock, Printer, Send, ShieldCheck, XCircle } from "lucide-react";
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 import CourseThumbnail from "../components/CourseThumbnail";
@@ -38,19 +38,29 @@ function StudentCertificate({ user }) {
           getDocs(query(collection(db, "certificateRequests"), where("userId", "==", user.uid))),
         ]);
         if (cancelled) return;
-        const ids = [...new Set(completionSnap.docs.map((item) => item.data().courseId).filter(Boolean))];
-        const courseSnaps = await Promise.all(ids.map((id) => getDoc(doc(db, "courses", id))));
-        const nextCourses = courseSnaps.filter((snap) => snap.exists()).map((snap) => ({ id: snap.id, ...snap.data() })).filter((course) => course.certificate !== false);
+
+        // A completed-course record already contains the authoritative courseId/title.
+        // Do not re-read /courses here: a course may be unpublished while a student still
+        // has a valid completion, and the public /courses rule intentionally blocks that read.
+        const nextCourses = completionSnap.docs
+          .map((item) => ({ id: item.data().courseId, title: item.data().courseTitle || "Untitled Course", certificate: true }))
+          .filter((course) => course.id);
+        const uniqueCourses = Array.from(new Map(nextCourses.map((course) => [course.id, course])).values());
+
         const nextRequests = {};
         requestSnap.docs.forEach((item) => { const data = item.data(); if (data.courseId) nextRequests[data.courseId] = { id: item.id, ...data }; });
-        const certSnaps = await Promise.all(nextCourses.map((course) => getDoc(doc(db, "certificates", certificateId(user.uid, course.id)))));
+        const certSnaps = await Promise.all(uniqueCourses.map((course) => getDoc(doc(db, "certificates", certificateId(user.uid, course.id)))));
         const nextCertificates = {};
-        certSnaps.forEach((snap, index) => { if (snap.exists()) nextCertificates[nextCourses[index].id] = { id: snap.id, ...snap.data() }; });
+        certSnaps.forEach((snap, index) => { if (snap.exists()) nextCertificates[uniqueCourses[index].id] = { id: snap.id, ...snap.data() }; });
         if (cancelled) return;
-        setCourses(nextCourses); setRequests(nextRequests); setCertificates(nextCertificates);
-        setSelectedId((current) => nextCourses.some((course) => course.id === current) ? current : nextCourses[0]?.id || "");
-      } catch (err) { if (!cancelled) setError(err?.message || "Unable to load certificate status."); }
-      finally { if (!cancelled) setLoading(false); }
+        setCourses(uniqueCourses); setRequests(nextRequests); setCertificates(nextCertificates);
+        setSelectedId((current) => uniqueCourses.some((course) => course.id === current) ? current : uniqueCourses[0]?.id || "");
+      } catch (err) {
+        if (!cancelled) {
+          const message = String(err?.message || "Unable to load certificate status.");
+          setError(message.includes("Missing or insufficient permissions") ? "Your certificate data could not be read because Firebase permissions are blocking the request. Please refresh after the latest security-rule deployment." : message);
+        }
+      } finally { if (!cancelled) setLoading(false); }
     };
     load();
     return () => { cancelled = true; };
@@ -97,33 +107,7 @@ function StudentCertificate({ user }) {
   const verifyUrl = `${window.location.origin}/verify-certificate?certificateId=${encodeURIComponent(certificate.certificateId)}`;
   return <div className="mx-auto max-w-[1240px]">
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden"><div><p className="text-xs font-black uppercase tracking-[.18em] text-blue-600">Issued Certificate</p><p className="mt-1 text-sm font-semibold text-slate-500">Professional digital certificate • ready to print</p></div><button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"><Printer size={17} /> Download / Print</button></div>
-    <div className="certificate-print-root">
-      <div className="certificate-sheet">
-        <div className="certificate-sheet-inner">
-          <div className="certificate-top-band" /><div className="certificate-bottom-band" />
-          <span className="certificate-corner certificate-corner-tl" /><span className="certificate-corner certificate-corner-tr" /><span className="certificate-corner certificate-corner-bl" /><span className="certificate-corner certificate-corner-br" />
-          <div className="certificate-watermark">OA</div>
-          <div className="certificate-content relative flex h-full flex-col justify-between text-center">
-            <div>
-              <div className="certificate-header-mark mx-auto flex items-center justify-center"><GraduationCap size={30} /></div>
-              <p className="mt-3 text-[10px] font-black tracking-[.38em] text-blue-800 sm:text-xs">ONLINE ACADEMY</p>
-              <div className="mt-2 flex items-center justify-center gap-3"><span className="certificate-rule" /><span className="text-[9px] font-black tracking-[.2em] text-slate-500 sm:text-[10px]">CERTIFICATE OF COMPLETION</span><span className="certificate-rule" /></div>
-              <h1 className="mt-3 text-[clamp(1.65rem,4.4vw,3.35rem)] font-black leading-none tracking-tight text-slate-950">Certificate of Completion</h1>
-              <p className="mt-3 text-[11px] text-slate-500 sm:mt-4 sm:text-sm">This certificate is proudly presented to</p>
-              <h2 className="mt-1.5 break-words text-[clamp(1.45rem,4vw,2.75rem)] font-black leading-tight text-blue-800">{certificate.studentName || user.displayName || user.email}</h2>
-              <p className="mt-2 text-[11px] text-slate-500 sm:mt-3 sm:text-sm">for successfully completing</p>
-              <h3 className="mx-auto mt-1.5 max-w-4xl break-words text-[clamp(1.15rem,2.8vw,2rem)] font-extrabold leading-tight text-slate-900">{certificate.courseTitle || selectedCourse.title}</h3>
-            </div>
-            <div className="mt-4 sm:mt-5">
-              <div className="certificate-meta-grid mx-auto grid max-w-4xl gap-2 text-left sm:grid-cols-3 sm:gap-3"><div className="rounded-xl bg-slate-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 sm:text-[10px]">Certificate ID</p><strong className="mt-1 block break-all text-[10px] font-black text-slate-900 sm:text-xs">{certificate.certificateId}</strong></div><div className="rounded-xl bg-slate-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 sm:text-[10px]">Issue Date</p><strong className="mt-1 block text-[10px] font-black text-slate-900 sm:text-xs">{certificate.issueDate}</strong></div><div className="rounded-xl bg-emerald-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 sm:text-[10px]">Status</p><strong className="mt-1 flex items-center gap-1 text-[10px] font-black text-emerald-700 sm:text-xs"><CheckCircle2 size={14} /> Valid</strong></div></div>
-              <div className="certificate-signatures mt-4 grid grid-cols-3 items-end gap-3 text-left sm:mt-6 sm:gap-6"><div><div className="w-full max-w-[190px] border-t border-slate-400 pt-1.5 text-[10px] font-black sm:text-xs">Online Academy</div><p className="text-[9px] text-slate-500 sm:text-[10px]">Authorized Issuer</p></div><div className="flex justify-center"><Award className="text-blue-700" size={42} /></div><div className="text-right"><div className="ml-auto w-full max-w-[190px] border-t border-slate-400 pt-1.5 text-[10px] font-black sm:text-xs">Certificate Office</div><p className="text-[9px] text-slate-500 sm:text-[10px]">Official Record</p></div></div>
-              <div className="certificate-verification mt-3 text-[8px] leading-4 text-slate-400 sm:text-[9px]">Verify this certificate online: {verifyUrl}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>;
+    <div className="certificate-print-root"><div className="certificate-sheet"><div className="certificate-sheet-inner"><div className="certificate-top-band" /><div className="certificate-bottom-band" /><span className="certificate-corner certificate-corner-tl" /><span className="certificate-corner certificate-corner-tr" /><span className="certificate-corner certificate-corner-bl" /><span className="certificate-corner certificate-corner-br" /><div className="certificate-watermark">OA</div><div className="certificate-content relative flex h-full flex-col justify-between text-center"><div><div className="certificate-header-mark mx-auto flex items-center justify-center"><GraduationCap size={30} /></div><p className="mt-3 text-[10px] font-black tracking-[.38em] text-blue-800 sm:text-xs">ONLINE ACADEMY</p><div className="mt-2 flex items-center justify-center gap-3"><span className="certificate-rule" /><span className="text-[9px] font-black tracking-[.2em] text-slate-500 sm:text-[10px]">CERTIFICATE OF COMPLETION</span><span className="certificate-rule" /></div><h1 className="mt-3 text-[clamp(1.65rem,4.4vw,3.35rem)] font-black leading-none tracking-tight text-slate-950">Certificate of Completion</h1><p className="mt-3 text-[11px] text-slate-500 sm:mt-4 sm:text-sm">This certificate is proudly presented to</p><h2 className="mt-1.5 break-words text-[clamp(1.45rem,4vw,2.75rem)] font-black leading-tight text-blue-800">{certificate.studentName || user.displayName || user.email}</h2><p className="mt-2 text-[11px] text-slate-500 sm:mt-3 sm:text-sm">for successfully completing</p><h3 className="mx-auto mt-1.5 max-w-4xl break-words text-[clamp(1.15rem,2.8vw,2rem)] font-extrabold leading-tight text-slate-900">{certificate.courseTitle || selectedCourse.title}</h3></div><div className="mt-4 sm:mt-5"><div className="certificate-meta-grid mx-auto grid max-w-4xl gap-2 text-left sm:grid-cols-3 sm:gap-3"><div className="rounded-xl bg-slate-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 sm:text-[10px]">Certificate ID</p><strong className="mt-1 block break-all text-[10px] font-black text-slate-900 sm:text-xs">{certificate.certificateId}</strong></div><div className="rounded-xl bg-slate-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-500 sm:text-[10px]">Issue Date</p><strong className="mt-1 block text-[10px] font-black text-slate-900 sm:text-xs">{certificate.issueDate}</strong></div><div className="rounded-xl bg-emerald-50/90 p-3 sm:rounded-2xl sm:p-4"><p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 sm:text-[10px]">Status</p><strong className="mt-1 flex items-center gap-1 text-[10px] font-black text-emerald-700 sm:text-xs"><CheckCircle2 size={14} /> Valid</strong></div></div><div className="certificate-signatures mt-4 grid grid-cols-3 items-end gap-3 text-left sm:mt-6 sm:gap-6"><div><div className="w-full max-w-[190px] border-t border-slate-400 pt-1.5 text-[10px] font-black sm:text-xs">Online Academy</div><p className="text-[9px] text-slate-500 sm:text-[10px]">Authorized Issuer</p></div><div className="flex justify-center"><Award className="text-blue-700" size={42} /></div><div className="text-right"><div className="ml-auto w-full max-w-[190px] border-t border-slate-400 pt-1.5 text-[10px] font-black sm:text-xs">Certificate Office</div><p className="text-[9px] text-slate-500 sm:text-[10px]">Official Record</p></div></div><div className="certificate-verification mt-3 text-[8px] leading-4 text-slate-400 sm:text-[9px]">Verify this certificate online: {verifyUrl}</div></div></div></div></div></div>;
 }
 
 function AdminCertificatePanel() {
