@@ -1,4 +1,4 @@
-import { firestoreGet, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
+import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
 
     if (!orderId || !METHODS.has(paymentMethod)) return json(res, 400, { error: "Invalid JazzCash payment details" });
     if (!reference || reference.length < 4) return json(res, 400, { error: "Enter the JazzCash transaction/reference number" });
+    if (!senderName) return json(res, 400, { error: "Enter the sender name used for the JazzCash payment" });
 
     const method = paymentMethods().find((item) => item.id === paymentMethod);
     if (!method?.configured) return json(res, 503, { error: "JazzCash is not configured yet. Add JAZZCASH_ACCOUNT_NAME and JAZZCASH_ACCOUNT_NUMBER in Vercel Environment Variables." });
@@ -47,8 +48,41 @@ export default async function handler(req, res) {
     if (order.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
     if (order.status !== "pending") return json(res, 400, { error: `Order is already ${order.status}` });
 
+    const duplicateReferences = await firestoreQuery("orders", [{ field: "manualReference", value: reference }]);
+    if (duplicateReferences.some((row) => String(row.fields?.orderId || row.id || "") !== orderId)) {
+      return json(res, 409, { error: "This transaction/reference number has already been submitted for another order." });
+    }
+
     const now = new Date();
-    await firestoreSet(`orders/${orderId}`, { ...order, status: "manual_pending", paymentProvider: "jazzcash", paymentMethod: "jazzcash", manualReference: reference, manualSenderName: senderName, manualSubmittedAt: now, updatedAt: now });
+    await firestoreSet(`orders/${orderId}`, {
+      ...order,
+      status: "manual_pending",
+      paymentProvider: "jazzcash",
+      paymentMethod: "jazzcash",
+      manualReference: reference,
+      manualSenderName: senderName,
+      manualSubmittedAt: now,
+      paymentVerificationStatus: "pending_admin_verification",
+      updatedAt: now,
+    });
+
+    await firestoreSet(`adminNotifications/payment-${orderId}-submitted`, {
+      type: "payment",
+      event: "manual_payment_submitted",
+      title: "Payment submitted for verification",
+      message: `${senderName} submitted a JazzCash payment reference for ${order.courseTitle || "Course"}. Verify the actual transaction in Finance & Billing before approving.`,
+      orderId,
+      userId: user.localId,
+      customerEmail: user.email || order.customerEmail || "",
+      courseId: order.courseId || "",
+      courseTitle: order.courseTitle || "Course",
+      amount: Number(order.finalAmount || 0),
+      paymentMethod: "jazzcash",
+      reference,
+      read: false,
+      createdAt: now,
+    });
+
     return json(res, 200, { orderId, status: "manual_pending", paymentMethod: "jazzcash" });
   } catch (error) {
     console.error("JazzCash payment submit error:", error?.message || error);
