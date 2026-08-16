@@ -6,7 +6,6 @@ import { auth, db } from "../firebase";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const API_PATH = "/api/notifications";
-const PAYMENT_API_PATH = "/api/admin-payment-notifications";
 
 async function getAdminToken() {
   const user = auth.currentUser;
@@ -20,20 +19,6 @@ async function callNotificationApi(body) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Notification request failed.");
   return data;
-}
-
-async function loadPaymentNotifications() {
-  const token = await getAdminToken();
-  const response = await fetch(PAYMENT_API_PATH, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || "Unable to load payment notifications.");
-  return Array.isArray(data?.notifications) ? data.notifications : [];
-}
-
-async function setPaymentNotificationRead(notificationId, read = true) {
-  const token = await getAdminToken();
-  const response = await fetch(PAYMENT_API_PATH, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ notificationId, read }) });
-  if (!response.ok) throw new Error("Unable to update notification.");
 }
 
 function asDate(value) {
@@ -72,8 +57,8 @@ export default function AdminNotificationCenter() {
     let active = true;
     const refresh = async () => {
       try {
-        const items = await loadPaymentNotifications();
-        if (active) setPaymentNotifications(items);
+        const data = await callNotificationApi({ action: "paymentNotifications" });
+        if (active) setPaymentNotifications(Array.isArray(data?.notifications) ? data.notifications : []);
       } catch (error) {
         console.error("Admin payment notifications load failed:", error);
       }
@@ -115,7 +100,7 @@ export default function AdminNotificationCenter() {
 
   const markRead = async (notificationId) => {
     try {
-      await setPaymentNotificationRead(notificationId, true);
+      await callNotificationApi({ action: "markPaymentNotificationRead", notificationId, read: true });
       setPaymentNotifications((items) => items.map((item) => item.id === notificationId ? { ...item, read: true, readAt: new Date() } : item));
     } catch (error) {
       console.error("Unable to mark notification as read:", error);
@@ -124,7 +109,7 @@ export default function AdminNotificationCenter() {
 
   const markAllRead = async () => {
     const unread = paymentNotifications.filter((item) => item.read !== true);
-    await Promise.all(unread.map((item) => setPaymentNotificationRead(item.id, true).catch((error) => console.error(error))));
+    await Promise.all(unread.map((item) => callNotificationApi({ action: "markPaymentNotificationRead", notificationId: item.id, read: true }).catch((error) => console.error(error))));
     setPaymentNotifications((items) => items.map((item) => ({ ...item, read: true, readAt: new Date() })));
   };
 
