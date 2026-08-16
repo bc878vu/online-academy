@@ -111,30 +111,56 @@ header [role="menu"] {
     height: 40px !important;
   }
 
-  header + div[role="dialog"] aside {
-    width: min(300px, 82vw) !important;
-    max-width: 300px !important;
+  /* Compact mobile drawer: never stretch the navigation panel to full width. */
+  header + div[role="dialog"] aside,
+  div[role="dialog"] > aside {
+    position: absolute !important;
+    left: auto !important;
+    right: 0 !important;
+    width: 286px !important;
+    min-width: 0 !important;
+    max-width: min(286px, 82vw) !important;
+    flex: 0 0 286px !important;
+    overflow: hidden !important;
   }
 
-  header + div[role="dialog"] aside > div:first-child {
+  header + div[role="dialog"] aside > div:first-child,
+  div[role="dialog"] > aside > div:first-child {
     min-height: 66px !important;
     padding: 0 12px !important;
   }
 
-  header + div[role="dialog"] aside > div:nth-child(2) {
+  header + div[role="dialog"] aside > div:nth-child(2),
+  div[role="dialog"] > aside > div:nth-child(2) {
     padding: 12px 10px 16px !important;
     scrollbar-width: thin;
   }
 
   header + div[role="dialog"] aside > div:nth-child(2) a,
-  header + div[role="dialog"] aside > div:nth-child(2) button {
+  header + div[role="dialog"] aside > div:nth-child(2) button,
+  div[role="dialog"] > aside > div:nth-child(2) a,
+  div[role="dialog"] > aside > div:nth-child(2) button {
     min-height: 44px !important;
     border-radius: 12px !important;
     font-size: 13px !important;
   }
 
-  header + div[role="dialog"] aside > div:last-child {
+  header + div[role="dialog"] aside > div:last-child,
+  div[role="dialog"] > aside > div:last-child {
     padding: 10px !important;
+  }
+
+  /* Mobile profile card also shows only the profile photo. */
+  div[role="dialog"] > aside > div:last-child a[href="/profile"] {
+    justify-content: center !important;
+    width: 54px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 6px !important;
+  }
+
+  div[role="dialog"] > aside > div:last-child a[href="/profile"] > div {
+    display: none !important;
   }
 }
 
@@ -147,8 +173,20 @@ header [role="menu"] {
     font-size: 15px !important;
   }
 
-  header + div[role="dialog"] aside {
-    width: min(286px, 84vw) !important;
+  header + div[role="dialog"] aside,
+  div[role="dialog"] > aside {
+    width: 278px !important;
+    max-width: 78vw !important;
+    flex-basis: 278px !important;
+  }
+}
+
+@media (max-width: 340px) {
+  header + div[role="dialog"] aside,
+  div[role="dialog"] > aside {
+    width: 264px !important;
+    max-width: 82vw !important;
+    flex-basis: 264px !important;
   }
 }
 
