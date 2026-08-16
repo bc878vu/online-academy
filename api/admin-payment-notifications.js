@@ -25,6 +25,11 @@ function timeValue(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function documentId(name = "") {
+  const parts = String(name).split("/");
+  return parts[parts.length - 1] || "";
+}
+
 export default async function handler(req, res) {
   if (!["GET", "POST"].includes(req.method)) return json(res, 405, { error: "Method Not Allowed" });
 
@@ -34,7 +39,8 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const rows = await firestoreQuery("adminNotifications", [{ field: "type", value: "payment" }]);
       const notifications = rows
-        .map((row) => ({ id: row.id, ...(row.fields || {}) }))
+        .map((row) => ({ id: documentId(row.name), ...(row.fields || {}) }))
+        .filter((item) => item.id)
         .sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt))
         .slice(0, 50);
       return json(res, 200, { notifications });
