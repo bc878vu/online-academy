@@ -7,7 +7,7 @@ import {
 } from "./_firebase.js";
 
 const MAX_COUPON_DISCOUNT = 1000000;
-const PAYMENT_METHODS = new Set(["payfast", "jazzcash", "easypaisa", "bank_transfer"]);
+const PAYMENT_METHODS = new Set(["payfast"]);
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     const couponCode = normalizeCode(req.body?.couponCode);
     const paymentMethod = String(req.body?.paymentMethod || "payfast").trim().toLowerCase();
     if (!courseId) return json(res, 400, { error: "Course ID is required" });
-    if (!PAYMENT_METHODS.has(paymentMethod)) return json(res, 400, { error: "Unsupported payment method" });
+    if (!PAYMENT_METHODS.has(paymentMethod)) return json(res, 400, { error: "Only the verified PayFast gateway is available for paid courses." });
 
     const course = await firestoreGet(`courses/${courseId}`);
     if (!course) return json(res, 404, { error: "Course not found" });
@@ -92,10 +92,12 @@ export default async function handler(req, res) {
     }
 
     const finalAmount = Math.max(0, Math.round((originalAmount - discountAmount) * 100) / 100);
+    if (finalAmount <= 0) {
+      return json(res, 400, { error: "A paid course must use a real payment gateway. Use a valid paid coupon or free course instead." });
+    }
+
     const orderId = `OA-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     const now = new Date();
-    const isZeroAmount = finalAmount <= 0;
-    const actualMethod = isZeroAmount ? "coupon" : paymentMethod;
 
     await firestoreSet(`orders/${orderId}`, {
       orderId,
@@ -107,10 +109,11 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       couponCode: couponCode || "",
-      paymentProvider: actualMethod,
-      paymentMethod: actualMethod,
-      status: isZeroAmount ? "paid" : "pending",
-      paidAt: isZeroAmount ? now : null,
+      paymentProvider: "payfast",
+      paymentMethod: "payfast",
+      status: "pending",
+      paidAt: null,
+      paymentVerified: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -123,9 +126,9 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       currency: "PKR",
-      paymentProvider: actualMethod,
-      paymentMethod: actualMethod,
-      status: isZeroAmount ? "paid" : "pending",
+      paymentProvider: "payfast",
+      paymentMethod: "payfast",
+      status: "pending",
     });
   } catch (error) {
     console.error("Create order error:", error?.message || error);
