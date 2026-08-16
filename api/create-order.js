@@ -58,13 +58,13 @@ export default async function handler(req, res) {
     const isPaid = courseData.isPaid === true || originalAmount > 0;
     if (!isPaid || originalAmount <= 0) return json(res, 400, { error: "This course is free" });
 
-    // One verified purchase unlocks the course for this account permanently
-    // until an administrator processes a real gateway refund.
+    // One recorded paid order permanently unlocks this user/course combination
+    // until an administrator processes a real refund. This also prevents duplicate
+    // charges if the learner returns to checkout later.
     const existingPaid = await firestoreQuery("orders", [
       { field: "userId", value: user.localId },
       { field: "courseId", value: courseId },
       { field: "status", value: "paid" },
-      { field: "paymentVerified", value: true },
     ]).catch(() => []);
     const priorPayment = existingPaid[0]?.fields;
     if (priorPayment?.orderId) {
@@ -75,10 +75,10 @@ export default async function handler(req, res) {
         courseTitle: courseData.title || "Untitled Course",
         finalAmount: Number(priorPayment.finalAmount || originalAmount),
         currency: "PKR",
-        paymentProvider: "payfast",
-        paymentMethod: "payfast",
+        paymentProvider: priorPayment.paymentProvider || "payfast",
+        paymentMethod: priorPayment.paymentMethod || "payfast",
         status: "paid",
-        paymentVerified: true,
+        paymentVerified: priorPayment.paymentVerified !== false,
       });
     }
 
