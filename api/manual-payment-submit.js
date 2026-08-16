@@ -10,17 +10,22 @@ function json(res, status, body) {
 const METHODS = new Set(["jazzcash", "easypaisa", "bank_transfer"]);
 const value = (name, fallback = "") => String(process.env[name] || fallback).trim();
 
+function paymentMethods() {
+  const payfastConfigured = value("PAYFAST_MERCHANT_ID") !== "";
+  const jazzcashConfigured = value("JAZZCASH_ACCOUNT_NUMBER") !== "";
+  const easypaisaConfigured = value("EASYPAISA_ACCOUNT_NUMBER") !== "";
+  const bankConfigured = value("BANK_ACCOUNT_NUMBER") !== "";
+
+  return [
+    { id: "payfast", name: "PayFast Checkout", type: "gateway", description: payfastConfigured ? "Secure hosted checkout for cards, bank accounts, mobile wallets and supported Raast options." : "Cards, bank accounts, mobile wallets and supported Raast options. Gateway setup is required.", enabled: true, configured: payfastConfigured },
+    { id: "jazzcash", name: "JazzCash", type: "manual", description: jazzcashConfigured ? "Pay directly to the configured JazzCash account and submit the transaction ID for verification." : "JazzCash payment option — admin account details are not configured yet.", enabled: true, configured: jazzcashConfigured, accountName: value("JAZZCASH_ACCOUNT_NAME"), accountNumber: value("JAZZCASH_ACCOUNT_NUMBER") },
+    { id: "easypaisa", name: "Easypaisa", type: "manual", description: easypaisaConfigured ? "Pay directly to the configured Easypaisa account and submit the transaction ID for verification." : "Easypaisa payment option — admin account details are not configured yet.", enabled: true, configured: easypaisaConfigured, accountName: value("EASYPAISA_ACCOUNT_NAME"), accountNumber: value("EASYPAISA_ACCOUNT_NUMBER") },
+    { id: "bank_transfer", name: "Bank Transfer", type: "manual", description: bankConfigured ? "Transfer the payable amount to the configured bank account and submit the transaction reference." : "Bank transfer option — admin bank details are not configured yet.", enabled: true, configured: bankConfigured, accountName: value("BANK_ACCOUNT_NAME"), accountNumber: value("BANK_ACCOUNT_NUMBER"), bankName: value("BANK_NAME"), iban: value("BANK_IBAN") },
+  ];
+}
+
 export default async function handler(req, res) {
-  if (req.method === "GET") {
-    return json(res, 200, {
-      methods: [
-        { id: "payfast", name: "PayFast Checkout", type: "gateway", description: "Cards, bank accounts, mobile wallets and supported Raast options through PayFast.", enabled: value("PAYFAST_MERCHANT_ID") !== "" },
-        { id: "jazzcash", name: "JazzCash", type: "manual", description: "Pay directly to the configured JazzCash account and submit the transaction ID.", enabled: value("JAZZCASH_ACCOUNT_NUMBER") !== "", accountName: value("JAZZCASH_ACCOUNT_NAME"), accountNumber: value("JAZZCASH_ACCOUNT_NUMBER") },
-        { id: "easypaisa", name: "Easypaisa", type: "manual", description: "Pay directly to the configured Easypaisa account and submit the transaction ID.", enabled: value("EASYPAISA_ACCOUNT_NUMBER") !== "", accountName: value("EASYPAISA_ACCOUNT_NAME"), accountNumber: value("EASYPAISA_ACCOUNT_NUMBER") },
-        { id: "bank_transfer", name: "Bank Transfer", type: "manual", description: "Transfer the payable amount to the configured bank account and submit the transaction reference.", enabled: value("BANK_ACCOUNT_NUMBER") !== "", accountName: value("BANK_ACCOUNT_NAME"), accountNumber: value("BANK_ACCOUNT_NUMBER"), bankName: value("BANK_NAME"), iban: value("BANK_IBAN") },
-      ],
-    });
-  }
+  if (req.method === "GET") return json(res, 200, { methods: paymentMethods() });
   if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
 
   try {
@@ -35,7 +40,10 @@ export default async function handler(req, res) {
     const senderName = String(req.body?.senderName || "").trim().slice(0, 120);
 
     if (!orderId || !METHODS.has(paymentMethod)) return json(res, 400, { error: "Invalid manual payment details" });
-    if (reference.length < 4) return json(res, 400, { error: "Enter the transaction/reference number" });
+    if (!reference || reference.length < 4) return json(res, 400, { error: "Enter the transaction/reference number" });
+
+    const method = paymentMethods().find((item) => item.id === paymentMethod);
+    if (!method?.configured) return json(res, 503, { error: `${method?.name || "This payment method"} is not configured yet. Please choose another payment method.` });
 
     const orderDoc = await firestoreGet(`orders/${orderId}`);
     if (!orderDoc) return json(res, 404, { error: "Order not found" });
