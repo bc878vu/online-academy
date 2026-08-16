@@ -1,4 +1,4 @@
-import { firestoreGet, firestoreQuery, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
+import { firestoreQuery, firestoreGet, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -7,16 +7,21 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-const METHODS = new Set(["jazzcash"]);
-const value = (name, fallback = "") => String(process.env[name] || fallback).trim();
+function value(name, fallback = "") { return String(process.env[name] || fallback).trim(); }
 
 function paymentMethods() {
-  const payfastConfigured = value("PAYFAST_MERCHANT_ID") !== "" && value("PAYFAST_SECURED_KEY") !== "";
-  const jazzcashConfigured = value("JAZZCASH_ACCOUNT_NUMBER") !== "";
-
+  const configured = value("PAYFAST_MERCHANT_ID") !== "" && value("PAYFAST_SECURED_KEY") !== "";
   return [
-    { id: "payfast", name: "PayFast Checkout", type: "gateway", description: payfastConfigured ? "Secure hosted checkout for cards, bank accounts, mobile wallets and supported Raast options." : "PayFast automatic checkout — merchant configuration is required.", enabled: true, configured: payfastConfigured },
-    { id: "jazzcash", name: "JazzCash", type: "manual", description: jazzcashConfigured ? "Pay directly to the configured JazzCash account and submit the transaction ID for admin verification." : "JazzCash payment option — account details are not configured yet.", enabled: true, configured: jazzcashConfigured, accountName: value("JAZZCASH_ACCOUNT_NAME"), accountNumber: value("JAZZCASH_ACCOUNT_NUMBER") },
+    {
+      id: "payfast",
+      name: "PayFast Secure Checkout",
+      type: "gateway",
+      description: configured
+        ? "Real-time gateway payment. The bank/wallet/card balance is checked by PayFast and only a verified successful transaction unlocks the course."
+        : "Secure gateway payment — merchant configuration is required.",
+      enabled: true,
+      configured,
+    },
   ];
 }
 
@@ -28,64 +33,29 @@ export default async function handler(req, res) {
     const authHeader = String(req.headers.authorization || "");
     const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
     if (!idToken) return json(res, 401, { error: "Authentication required" });
-
     const user = await verifyFirebaseIdToken(idToken);
     const orderId = String(req.body?.orderId || "").trim();
-    const paymentMethod = String(req.body?.paymentMethod || "").trim();
-    const reference = String(req.body?.reference || "").trim().slice(0, 120);
-    const senderName = String(req.body?.senderName || "").trim().slice(0, 120);
-
-    if (!orderId || !METHODS.has(paymentMethod)) return json(res, 400, { error: "Invalid JazzCash payment details" });
-    if (!reference || reference.length < 4) return json(res, 400, { error: "Enter the JazzCash transaction/reference number" });
-    if (!senderName) return json(res, 400, { error: "Enter the sender name used for the JazzCash payment" });
-
-    const method = paymentMethods().find((item) => item.id === paymentMethod);
-    if (!method?.configured) return json(res, 503, { error: "JazzCash is not configured yet. Add JAZZCASH_ACCOUNT_NAME and JAZZCASH_ACCOUNT_NUMBER in Vercel Environment Variables." });
+    if (!orderId) return json(res, 400, { error: "Order ID is required" });
 
     const orderDoc = await firestoreGet(`orders/${orderId}`);
     if (!orderDoc) return json(res, 404, { error: "Order not found" });
     const order = orderDoc.fields;
     if (order.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
-    if (order.status !== "pending") return json(res, 400, { error: `Order is already ${order.status}` });
 
-    const duplicateReferences = await firestoreQuery("orders", [{ field: "manualReference", value: reference }]);
-    if (duplicateReferences.some((row) => String(row.fields?.orderId || row.id || "") !== orderId)) {
-      return json(res, 409, { error: "This transaction/reference number has already been submitted for another order." });
-    }
-
-    const now = new Date();
+    await firestoreQuery("orders", [{ field: "manualReference", value: "__disabled_manual_payment__" }]);
     await firestoreSet(`orders/${orderId}`, {
       ...order,
-      status: "manual_pending",
-      paymentProvider: "jazzcash",
-      paymentMethod: "jazzcash",
-      manualReference: reference,
-      manualSenderName: senderName,
-      manualSubmittedAt: now,
-      paymentVerificationStatus: "pending_admin_verification",
-      updatedAt: now,
+      status: order.status === "paid" ? "paid" : "payment_failed",
+      paymentProvider: "payfast",
+      paymentMethod: "payfast",
+      providerStatusCode: "MANUAL_DISABLED",
+      providerStatusMessage: "Manual payment references are disabled. Use the real PayFast checkout.",
+      updatedAt: new Date(),
     });
 
-    await firestoreSet(`adminNotifications/payment-${orderId}-submitted`, {
-      type: "payment",
-      event: "manual_payment_submitted",
-      title: "Payment submitted for verification",
-      message: `${senderName} submitted a JazzCash payment reference for ${order.courseTitle || "Course"}. Verify the actual transaction in Finance & Billing before approving.`,
-      orderId,
-      userId: user.localId,
-      customerEmail: user.email || order.customerEmail || "",
-      courseId: order.courseId || "",
-      courseTitle: order.courseTitle || "Course",
-      amount: Number(order.finalAmount || 0),
-      paymentMethod: "jazzcash",
-      reference,
-      read: false,
-      createdAt: now,
-    });
-
-    return json(res, 200, { orderId, status: "manual_pending", paymentMethod: "jazzcash" });
+    return json(res, 410, { error: "Manual payment references are disabled. Use the real PayFast checkout so the customer's actual account/wallet balance and transaction status are verified by the payment gateway." });
   } catch (error) {
-    console.error("JazzCash payment submit error:", error?.message || error);
-    return json(res, 500, { error: "Unable to submit JazzCash payment reference" });
+    console.error("Manual payment submit error:", error?.message || error);
+    return json(res, 500, { error: "Unable to process manual payment request" });
   }
 }
