@@ -40,9 +40,9 @@ const ADMIN_EMAIL = "admin@onlineacademy.com";
 function Brand({ className = "h-10 w-10" }) { return <img src="/favicon.svg" alt="Online Academy" className={`rounded-xl object-contain ${className}`} />; }
 function Avatar({ user, displayName, size = "h-9 w-9" }) { const initials = displayName.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase() || "S"; return user?.photoURL ? <img src={user.photoURL} alt="" className={`${size} shrink-0 rounded-xl object-cover ring-1 ring-slate-200`} /> : <span className={`flex ${size} shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white shadow-sm`}>{initials}</span>; }
 function Loader({ text = "Loading..." }) { return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center bg-slate-50"><div className="text-center"><Brand className="mx-auto h-14 w-14" /><div className="mx-auto mt-5 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" /><p className="mt-3 text-sm font-semibold text-slate-500">{text}</p></div></div>; }
-function Protected({ user, children }) { if (user === undefined) return <Loader text="Checking your account..." />; return user ? children : <Navigate to="/login" replace />; }
-function AuthOnly({ user, children }) { if (user === undefined) return <Loader />; return user ? <Navigate to="/dashboard" replace /> : children; }
-function AdminOnly({ user, isAdmin, children }) { if (user === undefined) return <Loader text="Checking admin access..." />; return user && isAdmin ? children : <Navigate to="/admin-login" replace />; }
+function Protected({ user, authReady, children }) { if (!authReady) return <Loader text="Preparing your account..." />; return user ? children : <Navigate to="/login" replace />; }
+function AuthOnly({ user, authReady, children }) { if (!authReady) return <Loader />; return user ? <Navigate to="/dashboard" replace /> : children; }
+function AdminOnly({ user, isAdmin, authReady, children }) { if (!authReady) return <Loader text="Checking admin access..." />; return user && isAdmin ? children : <Navigate to="/admin-login" replace />; }
 function CourseRoute() { const { courseId } = useParams(); return <PaidCourseGate courseId={courseId}><LectureProgressGuard><CourseDetails /><CourseAssessments courseId={courseId} /></LectureProgressGuard></PaidCourseGate>; }
 
 function Navbar({ user, isAdmin }) {
@@ -55,15 +55,7 @@ function Navbar({ user, isAdmin }) {
   const logout = async () => { try { await signOut(auth); } catch (error) { console.error("Logout failed", error); } setMoreOpen(false); setMobileOpen(false); };
   const displayName = user?.displayName || user?.email?.split("@")[0] || "Student";
   const mainLinks = [["/", "Home", Home], ["/courses", "Courses", BookOpen], ["/certificate", "Certificate", Award], ["/verify-certificate", "Verify", ShieldCheck]];
-  const adminLinks = isAdmin ? [
-    ["/admin", "Admin Courses", ShieldCheck],
-    ["/admin/assessments", "Assessments", BookOpen],
-    ["/admin/certificates", "Certificate Requests", Award],
-    ["/admin/commerce", "Paid Courses", CreditCard],
-    ["/admin/commerce?view=users", "User Management", UserCog],
-    ["/admin/commerce?view=promotions", "Offers & Promotions", Megaphone],
-    ["/admin/discounts", "Discounts", BadgePercent],
-  ] : [];
+  const adminLinks = isAdmin ? [["/admin", "Admin Courses", ShieldCheck], ["/admin/assessments", "Assessments", BookOpen], ["/admin/certificates", "Certificate Requests", Award], ["/admin/commerce", "Paid Courses", CreditCard], ["/admin/commerce?view=users", "User Management", UserCog], ["/admin/commerce?view=promotions", "Offers & Promotions", Megaphone], ["/admin/discounts", "Discounts", BadgePercent]] : [];
   const moreLinks = [...(user ? [["/dashboard", "Dashboard", LayoutDashboard]] : []), ["/about", "About Academy", FileText], ["/help", "Help Center", FileText], ["/terms", "Terms & Policies", FileText], ...(user ? [["/profile", "My Profile", User]] : [["/login", "Login", LogIn], ["/register", "Create Account", UserPlus]]), ...adminLinks];
   const navLinkClass = (to) => `group inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-[13px] font-extrabold transition-all duration-200 ${active(to) ? "border-blue-200 bg-blue-600 text-white shadow-md shadow-blue-600/20" : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-blue-700 hover:shadow-sm"}`;
   const moreButtonClass = `inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-[13px] font-extrabold transition-all duration-200 ${moreOpen || moreLinks.some(([to]) => active(to)) ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-blue-700 hover:shadow-sm"}`;
@@ -83,11 +75,41 @@ function Footer({ user, isAdmin }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(undefined);
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => { setUser(currentUser); setIsAdmin(currentUser?.email?.trim().toLowerCase() === ADMIN_EMAIL); }), []);
-  if (user === undefined) return <Loader text="Loading Online Academy..." />;
+  // Render the application shell immediately. Authentication is resolved in the background,
+  // so the landing page never blocks behind a full-screen auth spinner.
+  const [user, setUser] = useState(() => auth.currentUser ?? null);
+  const [authReady, setAuthReady] = useState(() => Boolean(auth.currentUser));
+  const [isAdmin, setIsAdmin] = useState(() => auth.currentUser?.email?.trim().toLowerCase() === ADMIN_EMAIL);
+
+  useEffect(() => {
+    let mounted = true;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!mounted) return;
+      setUser(currentUser);
+      setIsAdmin(currentUser?.email?.trim().toLowerCase() === ADMIN_EMAIL);
+      setAuthReady(true);
+    }, (error) => {
+      console.error("Firebase auth state error:", error);
+      if (mounted) setAuthReady(true);
+    });
+    return () => { mounted = false; unsubscribe(); };
+  }, []);
+
+  // Warm the two most-used route chunks after the shell has painted.
+  useEffect(() => {
+    const warm = () => {
+      import("./pages/Home").catch(() => {});
+      import("./pages/Courses").catch(() => {});
+    };
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 1800 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warm, 900);
+    return () => window.clearTimeout(id);
+  }, []);
+
   return <div className="flex min-h-screen flex-col bg-slate-50"><SEO /><Navbar user={user} isAdmin={isAdmin} /><main className="min-w-0 flex-1"><Suspense fallback={<Loader text="Loading page..." />}><Routes>
-    <Route path="/" element={<HomePage />} /><Route path="/courses" element={<Courses user={user} />} /><Route path="/courses/:courseId" element={<CourseRoute />} /><Route path="/about" element={<AcademyGuide />} /><Route path="/help" element={<AcademyGuide />} /><Route path="/checkout" element={<Protected user={user}><Checkout /></Protected>} /><Route path="/payment/success" element={<Protected user={user}><PaymentResult /></Protected>} /><Route path="/payment/failed" element={<Protected user={user}><PaymentResult failed /></Protected>} /><Route path="/certificate" element={<Certificate />} /><Route path="/verify-certificate" element={<VerifyCertificate />} /><Route path="/verify-email" element={<VerifyEmail />} /><Route path="/terms" element={<TermsPolicy />} /><Route path="/login" element={<AuthOnly user={user}><Login /></AuthOnly>} /><Route path="/register" element={<AuthOnly user={user}><Register /></AuthOnly>} /><Route path="/forgot-password" element={<AuthOnly user={user}><ForgotPassword /></AuthOnly>} /><Route path="/reset-password" element={<ResetPassword />} /><Route path="/admin-login" element={<AdminLogin user={user} isAdmin={isAdmin} adminLoading={false} />} /><Route path="/dashboard" element={<Protected user={user}><Dashboard /></Protected>} /><Route path="/profile" element={<Protected user={user}><Profile /></Protected>} /><Route path="/admin" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminCourses /></AdminOnly>} /><Route path="/admin/assessments" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminAssessments /></AdminOnly>} /><Route path="/admin/certificates" element={<AdminOnly user={user} isAdmin={isAdmin}><Certificate /></AdminOnly>} /><Route path="/admin/commerce" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminCommerce /></AdminOnly>} /><Route path="/admin/discounts" element={<AdminOnly user={user} isAdmin={isAdmin}><AdminDiscounts /></AdminOnly>} /><Route path="*" element={<NotFound />} />
+    <Route path="/" element={<HomePage user={user} />} /><Route path="/courses" element={<Courses user={user} />} /><Route path="/courses/:courseId" element={<CourseRoute />} /><Route path="/about" element={<AcademyGuide />} /><Route path="/help" element={<AcademyGuide />} /><Route path="/checkout" element={<Protected user={user} authReady={authReady}><Checkout /></Protected>} /><Route path="/payment/success" element={<Protected user={user} authReady={authReady}><PaymentResult /></Protected>} /><Route path="/payment/failed" element={<Protected user={user} authReady={authReady}><PaymentResult failed /></Protected>} /><Route path="/certificate" element={<Certificate />} /><Route path="/verify-certificate" element={<VerifyCertificate />} /><Route path="/verify-email" element={<VerifyEmail />} /><Route path="/terms" element={<TermsPolicy />} /><Route path="/login" element={<AuthOnly user={user} authReady={authReady}><Login /></AuthOnly>} /><Route path="/register" element={<AuthOnly user={user} authReady={authReady}><Register /></AuthOnly>} /><Route path="/forgot-password" element={<AuthOnly user={user} authReady={authReady}><ForgotPassword /></AuthOnly>} /><Route path="/reset-password" element={<ResetPassword />} /><Route path="/admin-login" element={<AdminLogin user={user} isAdmin={isAdmin} adminLoading={!authReady} />} /><Route path="/dashboard" element={<Protected user={user} authReady={authReady}><Dashboard /></Protected>} /><Route path="/profile" element={<Protected user={user} authReady={authReady}><Profile /></Protected>} /><Route path="/admin" element={<AdminOnly user={user} isAdmin={isAdmin} authReady={authReady}><AdminCourses /></AdminOnly>} /><Route path="/admin/assessments" element={<AdminOnly user={user} isAdmin={isAdmin} authReady={authReady}><AdminAssessments /></AdminOnly>} /><Route path="/admin/certificates" element={<AdminOnly user={user} isAdmin={isAdmin} authReady={authReady}><Certificate /></AdminOnly>} /><Route path="/admin/commerce" element={<AdminOnly user={user} isAdmin={isAdmin} authReady={authReady}><AdminCommerce /></AdminOnly>} /><Route path="/admin/discounts" element={<AdminOnly user={user} isAdmin={isAdmin} authReady={authReady}><AdminDiscounts /></AdminOnly>} /><Route path="*" element={<NotFound />} />
   </Routes></Suspense></main><Footer user={user} isAdmin={isAdmin} /></div>;
 }
