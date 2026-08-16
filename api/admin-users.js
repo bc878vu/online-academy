@@ -24,10 +24,55 @@ async function requireAdmin(req) {
   return user;
 }
 
-function safeUser(user, paidCourses = 0) {
+function profileFromFields(fields = {}) {
+  return {
+    gender: String(fields.gender || ""),
+    dateOfBirth: String(fields.dateOfBirth || ""),
+    maritalStatus: String(fields.maritalStatus || ""),
+    city: String(fields.city || ""),
+    country: String(fields.country || "Pakistan"),
+    address: String(fields.address || ""),
+    education: String(fields.education || ""),
+    currentStudy: String(fields.currentStudy || ""),
+    institution: String(fields.institution || ""),
+    profession: String(fields.profession || ""),
+    occupation: String(fields.occupation || ""),
+    bio: String(fields.bio || ""),
+    skills: Array.isArray(fields.skills) ? fields.skills.map(String).filter(Boolean).slice(0, 30) : [],
+    languages: Array.isArray(fields.languages) ? fields.languages.map(String).filter(Boolean).slice(0, 20) : [],
+    interests: Array.isArray(fields.interests) ? fields.interests.map(String).filter(Boolean).slice(0, 30) : [],
+    website: String(fields.website || ""),
+    socialLinks: fields.socialLinks && typeof fields.socialLinks === "object" ? fields.socialLinks : {},
+    phone: String(fields.phone || ""),
+    username: String(fields.username || ""),
+  };
+}
+
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const month = now.getMonth() - dob.getMonth();
+  if (month < 0 || (month === 0 && now.getDate() < dob.getDate())) age -= 1;
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+function profileCompletion(profile, user) {
+  const checks = [
+    Boolean(user.displayName), Boolean(user.photoUrl), Boolean(profile.gender), Boolean(profile.dateOfBirth),
+    Boolean(profile.maritalStatus), Boolean(profile.city), Boolean(profile.country), Boolean(profile.education),
+    Boolean(profile.currentStudy), Boolean(profile.institution), Boolean(profile.profession), Boolean(profile.bio),
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function safeUser(user, profile = {}, extras = {}) {
   const providers = Array.isArray(user.providerUserInfo)
     ? user.providerUserInfo.map((item) => String(item.providerId || "")).filter(Boolean)
     : [];
+  const normalizedProfile = { ...profileFromFields(profile), ...(profile || {}) };
   return {
     id: String(user.localId || ""),
     email: String(user.email || ""),
@@ -38,14 +83,20 @@ function safeUser(user, paidCourses = 0) {
     createdAt: Number(user.createdAt || 0),
     lastLoginAt: Number(user.lastLoginAt || 0),
     providers,
-    paidCourses,
+    ...normalizedProfile,
+    age: calculateAge(normalizedProfile.dateOfBirth),
+    profileCompletion: profileCompletion(normalizedProfile, user),
+    ...extras,
   };
 }
 
 async function listUsers() {
-  const [authUsers, orders] = await Promise.all([
+  const [authUsers, orders, profileRows, progressRows, attemptRows] = await Promise.all([
     listAuthUsers(),
     firestoreQuery("orders", [{ field: "status", value: "paid" }]).catch(() => []),
+    firestoreQuery("users").catch(() => []),
+    firestoreQuery("lessonProgress").catch(() => []),
+    firestoreQuery("assessmentAttempts").catch(() => []),
   ]);
 
   const paidMap = new Map();
@@ -58,9 +109,34 @@ async function listUsers() {
     if (courseId) paidMap.get(uid).add(courseId);
   }
 
+  const profileMap = new Map(profileRows.map((row) => [String(row.name || row.documentId || row.id || ""), row.fields || {}]).filter(([id]) => id));
+  const progressMap = new Map();
+  for (const row of progressRows) {
+    const f = row.fields || {};
+    const uid = String(f.userId || String(row.name || "").split("/").pop().split("_")[0]);
+    if (!uid) continue;
+    if (!progressMap.has(uid)) progressMap.set(uid, new Set());
+    const courseId = String(f.courseId || "");
+    if (courseId) progressMap.get(uid).add(courseId);
+  }
+  const attemptMap = new Map();
+  for (const row of attemptRows) {
+    const f = row.fields || {};
+    const uid = String(f.userId || "");
+    if (!uid) continue;
+    attemptMap.set(uid, (attemptMap.get(uid) || 0) + 1);
+  }
+
   return authUsers
     .filter((user) => String(user.localId || "") && !isPrimaryAdmin(user))
-    .map((user) => safeUser(user, paidMap.get(String(user.localId))?.size || 0))
+    .map((user) => {
+      const id = String(user.localId);
+      return safeUser(user, profileMap.get(id) || {}, {
+        paidCourses: paidMap.get(id)?.size || 0,
+        activeCourses: progressMap.get(id)?.size || 0,
+        assessmentAttempts: attemptMap.get(id) || 0,
+      });
+    })
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -83,16 +159,21 @@ async function createUser(body) {
   if (!id) throw new Error("User was created but no user ID was returned");
 
   await firestoreSet(`users/${id}`, {
-    displayName,
-    email,
-    photoUrl,
-    emailVerified,
-    disabled,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    displayName, email, photoUrl, emailVerified, disabled,
+    ...profileFromFields(body),
+    createdAt: new Date(), updatedAt: new Date(),
   });
 
-  return { ok: true, user: safeUser(created) };
+  return { ok: true, user: safeUser(created, body) };
+}
+
+function cleanProfilePatch(body) {
+  const profile = {};
+  const stringFields = ["gender", "dateOfBirth", "maritalStatus", "city", "country", "address", "education", "currentStudy", "institution", "profession", "occupation", "bio", "website", "phone", "username"];
+  for (const field of stringFields) if (Object.prototype.hasOwnProperty.call(body, field)) profile[field] = String(body[field] || "").trim().slice(0, field === "bio" ? 1200 : 240);
+  for (const field of ["skills", "languages", "interests"]) if (Object.prototype.hasOwnProperty.call(body, field)) profile[field] = Array.isArray(body[field]) ? body[field].map((x) => String(x).trim()).filter(Boolean).slice(0, 30) : [];
+  if (Object.prototype.hasOwnProperty.call(body, "socialLinks")) profile.socialLinks = body.socialLinks && typeof body.socialLinks === "object" ? body.socialLinks : {};
+  return profile;
 }
 
 async function updateUser(body) {
@@ -123,21 +204,24 @@ async function updateUser(body) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "emailVerified")) updates.emailVerified = Boolean(body.emailVerified);
   if (Object.prototype.hasOwnProperty.call(body, "disabled")) updates.disabled = Boolean(body.disabled);
-  if (!Object.keys(updates).length) throw Object.assign(new Error("No changes supplied"), { status: 400 });
+  const profilePatch = cleanProfilePatch(body);
+  if (!Object.keys(updates).length && !Object.keys(profilePatch).length) throw Object.assign(new Error("No changes supplied"), { status: 400 });
 
-  const updated = await updateAuthUser(id, updates);
+  const updated = Object.keys(updates).length ? await updateAuthUser(id, updates) : target;
   const existing = await firestoreGet(`users/${id}`);
-  await firestoreSet(`users/${id}`, {
+  const merged = {
     ...(existing?.fields || {}),
+    ...profilePatch,
     ...(Object.prototype.hasOwnProperty.call(updates, "displayName") ? { displayName: updates.displayName } : {}),
     ...(Object.prototype.hasOwnProperty.call(updates, "email") ? { email: updates.email } : {}),
     ...(Object.prototype.hasOwnProperty.call(updates, "photoUrl") ? { photoUrl: updates.photoUrl } : {}),
     ...(Object.prototype.hasOwnProperty.call(updates, "emailVerified") ? { emailVerified: updates.emailVerified } : {}),
     ...(Object.prototype.hasOwnProperty.call(updates, "disabled") ? { disabled: updates.disabled } : {}),
     updatedAt: new Date(),
-  });
+  };
+  await firestoreSet(`users/${id}`, merged);
 
-  return { ok: true, user: safeUser(updated) };
+  return { ok: true, user: safeUser(updated, merged) };
 }
 
 async function resetPassword(body) {
@@ -157,19 +241,8 @@ async function deleteUser(body) {
   if (isPrimaryAdmin(target)) throw Object.assign(new Error("The primary administrator cannot be deleted"), { status: 400 });
 
   await deleteAuthUser(id);
-
-  // Keep learning/payment/certificate history for auditability, but mark the
-  // profile record so it cannot accidentally be treated as an active account.
   const existing = await firestoreGet(`users/${id}`);
-  if (existing?.fields) {
-    await firestoreSet(`users/${id}`, {
-      ...existing.fields,
-      accountDeleted: true,
-      deletedAt: new Date(),
-      disabled: true,
-    });
-  }
-
+  if (existing?.fields) await firestoreSet(`users/${id}`, { ...existing.fields, accountDeleted: true, deletedAt: new Date(), disabled: true });
   return { ok: true, deletedUserId: id };
 }
 
@@ -177,7 +250,6 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
     const action = String(req.method === "GET" ? req.query?.action || "list" : req.body?.action || "").trim();
-
     if (req.method === "GET" && action === "list") return json(res, 200, { ok: true, users: await listUsers() });
     if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
     if (action === "create") return json(res, 201, await createUser(req.body || {}));
