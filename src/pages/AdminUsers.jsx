@@ -1,238 +1,46 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle, Ban, Check, CheckCircle2, ChevronDown, Edit3, Filter, MailCheck,
-  RefreshCw, Search, ShieldCheck, Trash2, UserCog, Users, X
-} from "lucide-react";
+import { Search, RefreshCw, Users, UserCog, X, CheckCircle2, Ban, MailCheck, MapPin, GraduationCap, Heart, Globe2, BriefcaseBusiness, Save, Eye, Filter, ChevronDown } from "lucide-react";
 import { auth } from "../firebase";
 
-const EMPTY_FORM = { displayName: "", email: "", photoUrl: "", emailVerified: false, disabled: false };
+const EMPTY = { displayName: "", email: "", photoUrl: "", emailVerified: false, disabled: false, username: "", phone: "", gender: "", dateOfBirth: "", maritalStatus: "", city: "", country: "Pakistan", address: "", education: "", currentStudy: "", institution: "", profession: "", occupation: "", bio: "", website: "", skills: [], languages: [], interests: [], socialLinks: {} };
+const fields = ["gender", "dateOfBirth", "maritalStatus", "city", "country", "address", "education", "currentStudy", "institution", "profession", "occupation", "bio", "website", "phone", "username"];
+const ageOf = (dob) => { if (!dob) return ""; const d = new Date(dob); if (Number.isNaN(d.getTime())) return ""; const now = new Date(); let a = now.getFullYear() - d.getFullYear(); const m = now.getMonth() - d.getMonth(); if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--; return a >= 0 && a <= 120 ? a : ""; };
+const initials = (u) => (u.displayName || u.email || "U").split(/\s+/).filter(Boolean).slice(0,2).map((x) => x[0]).join("").toUpperCase();
+const countBy = (users, key, fallback = "Not specified") => { const map = new Map(); users.forEach((u) => { const value = String(u[key] || fallback); map.set(value, (map.get(value) || 0) + 1); }); return [...map.entries()].sort((a,b) => b[1] - a[1]); };
+function BarChart({ title, icon: Icon, rows }) { const max = Math.max(1, ...rows.map(([,v]) => v)); return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Icon size={17} /></span><h3 className="text-sm font-black text-slate-900">{title}</h3></div><div className="mt-4 space-y-3">{rows.slice(0,6).map(([label,value]) => <div key={label}><div className="mb-1 flex items-center justify-between gap-3 text-xs font-bold"><span className="truncate text-slate-600">{label}</span><span className="text-slate-900">{value}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max(5, value / max * 100)}%` }} /></div></div>)}{rows.length === 0 && <p className="text-xs text-slate-400">No profile data yet.</p>}</div></div>; }
+function TextField({ label, value, onChange, area = false }) { return <label className="block text-xs font-black text-slate-600">{label}{area ? <textarea rows={4} value={value || ""} onChange={(e) => onChange(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-blue-500" /> : <input value={value || ""} onChange={(e) => onChange(e.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-blue-500" />}</label>; }
+function SelectField({ label, value, onChange, options }) { return <label className="block text-xs font-black text-slate-600">{label}<select value={value || ""} onChange={(e) => onChange(e.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-500"><option value="">Select...</option>{options.map((x) => <option key={x}>{x}</option>)}</select></label>; }
 
-function formatDate(value) {
-  if (!value) return "Never";
-  const date = new Date(Number(value));
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function initials(user) {
-  return (user.displayName || user.email || "U")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-async function adminRequest(action, body = {}) {
-  const current = auth.currentUser;
-  if (!current) throw new Error("Admin session expired. Please sign in again.");
-  const token = await current.getIdToken();
-  const response = await fetch("/api/admin-users", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...body }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Request failed");
-  return data;
-}
+async function request(action, body = {}) { const current = auth.currentUser; if (!current) throw new Error("Admin session expired."); const token = await current.getIdToken(); const response = await fetch("/api/admin-users", { method: action === "list" ? "GET" : "POST", headers: { Authorization: `Bearer ${token}`, ...(action === "list" ? {} : { "Content-Type": "application/json" }) }, ...(action === "list" ? {} : { body: JSON.stringify({ action, ...body }) }) }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "Request failed"); return data; }
 
 export default function AdminUsers() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [verification, setVerification] = useState("all");
-  const [selected, setSelected] = useState(() => new Set());
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [busyId, setBusyId] = useState("");
-  const [toast, setToast] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [users,setUsers] = useState([]); const [loading,setLoading] = useState(true); const [refreshing,setRefreshing] = useState(false); const [query,setQuery] = useState("");
+  const [gender,setGender] = useState("all"); const [country,setCountry] = useState("all"); const [city,setCity] = useState("all"); const [marital,setMarital] = useState("all"); const [status,setStatus] = useState("all");
+  const [selected,setSelected] = useState(null); const [editing,setEditing] = useState(null); const [form,setForm] = useState(EMPTY); const [saving,setSaving] = useState(false); const [toast,setToast] = useState("");
+  const load = async (refresh=false) => { try { refresh ? setRefreshing(true) : setLoading(true); const data = await request("list"); setUsers(Array.isArray(data.users) ? data.users : []); } catch(e) { setToast(e.message || "Unable to load users"); } finally { setLoading(false); setRefreshing(false); } };
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!toast) return; const t=setTimeout(()=>setToast(""),3500); return ()=>clearTimeout(t); },[toast]);
+  const options = useMemo(() => ({ genders: countBy(users,"gender").map(([x])=>x), countries: countBy(users,"country").map(([x])=>x), cities: countBy(users,"city").map(([x])=>x), marital: countBy(users,"maritalStatus").map(([x])=>x) }),[users]);
+  const filtered = useMemo(() => { const q=query.trim().toLowerCase(); return users.filter(u => (!q || [u.displayName,u.email,u.id,u.username,u.city,u.country,u.education,u.currentStudy,u.profession].some(v=>String(v||"").toLowerCase().includes(q))) && (gender==="all"||u.gender===gender) && (country==="all"||u.country===country) && (city==="all"||u.city===city) && (marital==="all"||u.maritalStatus===marital) && (status==="all"||(status==="active"&&!u.disabled)||(status==="disabled"&&u.disabled))); },[users,query,gender,country,city,marital,status]);
+  const stats = useMemo(() => ({ total: filtered.length, active: filtered.filter(u=>!u.disabled).length, verified: filtered.filter(u=>u.emailVerified).length, complete: Math.round(filtered.reduce((s,u)=>s+(u.profileCompletion||0),0)/Math.max(1,filtered.length)) }),[filtered]);
+  const openEdit = (u) => { setSelected(null); setEditing(u); setForm({ ...EMPTY, ...u, socialLinks: u.socialLinks || {} }); };
+  const update = (key,value) => setForm((f)=>({...f,[key]:value}));
+  const save = async (e) => { e.preventDefault(); try { setSaving(true); const payload={ userId:editing.id, ...form, skills:Array.isArray(form.skills)?form.skills:[], languages:Array.isArray(form.languages)?form.languages:[], interests:Array.isArray(form.interests)?form.interests:[] }; const data=await request("update",payload); setUsers((items)=>items.map(u=>u.id===editing.id?{...u,...(data.user||payload)}:u)); setEditing(null); setToast("User profile updated successfully."); } catch(e){setToast(e.message||"Unable to save profile");} finally{setSaving(false);} };
+  const toggle = async (u) => { try { await request("update",{userId:u.id,disabled:!u.disabled}); setUsers(items=>items.map(x=>x.id===u.id?{...x,disabled:!u.disabled}:x)); setToast(u.disabled?"User activated.":"User deactivated."); } catch(e){setToast(e.message||"Unable to update status");} };
 
-  const loadUsers = async (isRefresh = false) => {
-    try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
-      const current = auth.currentUser;
-      if (!current) throw new Error("Admin session expired. Please sign in again.");
-      const token = await current.getIdToken();
-      const response = await fetch("/api/admin-users?action=list", { headers: { Authorization: `Bearer ${token}` } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to load users");
-      setUsers(Array.isArray(data.users) ? data.users : []);
-      setSelected(new Set());
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Unable to load users" });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { loadUsers(); }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return users.filter((user) => {
-      const matchesText = !needle || [user.displayName, user.email, user.id].some((value) => String(value || "").toLowerCase().includes(needle));
-      const matchesStatus = status === "all" || (status === "active" ? !user.disabled : user.disabled);
-      const matchesVerification = verification === "all" || (verification === "verified" ? user.emailVerified : !user.emailVerified);
-      return matchesText && matchesStatus && matchesVerification;
-    });
-  }, [users, query, status, verification]);
-
-  const counts = useMemo(() => ({
-    total: users.length,
-    active: users.filter((user) => !user.disabled).length,
-    disabled: users.filter((user) => user.disabled).length,
-    verified: users.filter((user) => user.emailVerified).length,
-  }), [users]);
-
-  const allVisibleSelected = filtered.length > 0 && filtered.every((user) => selected.has(user.id));
-
-  const toggleSelected = (id) => setSelected((current) => {
-    const next = new Set(current);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
-
-  const toggleAllVisible = () => setSelected((current) => {
-    const next = new Set(current);
-    if (allVisibleSelected) filtered.forEach((user) => next.delete(user.id));
-    else filtered.forEach((user) => next.add(user.id));
-    return next;
-  });
-
-  const openEdit = (user) => {
-    setEditing(user);
-    setForm({
-      displayName: user.displayName || "",
-      email: user.email || "",
-      photoUrl: user.photoUrl || "",
-      emailVerified: Boolean(user.emailVerified),
-      disabled: Boolean(user.disabled),
-    });
-  };
-
-  const saveUser = async (event) => {
-    event.preventDefault();
-    if (!editing) return;
-    try {
-      setSaving(true);
-      const data = await adminRequest("update", { userId: editing.id, ...form });
-      setUsers((current) => current.map((user) => user.id === editing.id ? { ...user, ...(data.user || form) } : user));
-      setEditing(null);
-      setToast({ type: "success", message: "User account updated successfully." });
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Unable to update user" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleUser = async (user) => {
-    try {
-      setBusyId(user.id);
-      await adminRequest("update", { userId: user.id, disabled: !user.disabled });
-      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, disabled: !user.disabled } : item));
-      setToast({ type: "success", message: `${user.disabled ? "User activated" : "User deactivated"}.` });
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Unable to change account status" });
-    } finally {
-      setBusyId("");
-    }
-  };
-
-  const verifyUser = async (user) => {
-    try {
-      setBusyId(user.id);
-      await adminRequest("update", { userId: user.id, emailVerified: true });
-      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, emailVerified: true } : item));
-      setToast({ type: "success", message: "Email marked as verified." });
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Unable to verify email" });
-    } finally {
-      setBusyId("");
-    }
-  };
-
-  const deleteOne = async (user) => {
-    try {
-      setBusyId(user.id);
-      await adminRequest("delete", { userId: user.id });
-      setUsers((current) => current.filter((item) => item.id !== user.id));
-      setSelected((current) => { const next = new Set(current); next.delete(user.id); return next; });
-      setConfirmDelete(null);
-      setToast({ type: "success", message: "User account permanently deleted. Learning and payment history was retained." });
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Unable to delete user" });
-    } finally {
-      setBusyId("");
-    }
-  };
-
-  const bulkStatus = async (disabled) => {
-    const ids = [...selected];
-    if (!ids.length) return;
-    try {
-      setBusyId("bulk");
-      for (const id of ids) await adminRequest("update", { userId: id, disabled });
-      setUsers((current) => current.map((user) => selected.has(user.id) ? { ...user, disabled } : user));
-      setSelected(new Set());
-      setToast({ type: "success", message: `${ids.length} account${ids.length === 1 ? "" : "s"} ${disabled ? "deactivated" : "activated"}.` });
-    } catch (error) {
-      setToast({ type: "error", message: error.message || "Bulk update failed" });
-    } finally {
-      setBusyId("");
-    }
-  };
-
-  return <div className="min-h-[calc(100vh-150px)] bg-slate-50 px-3 py-6 sm:px-5 lg:px-8 lg:py-9">
-    <div className="mx-auto max-w-[1480px]">
-      <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700"><UserCog size={14} /> Administration</div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">User Management</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 sm:text-base">Manage learner accounts, account access, verification and profile details from one secure workspace.</p>
-        </div>
-        <button type="button" onClick={() => loadUsers(true)} disabled={refreshing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-60"><RefreshCw size={17} className={refreshing ? "animate-spin" : ""} /> Refresh users</button>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['Total users', counts.total, Users], ['Active', counts.active, CheckCircle2], ['Disabled', counts.disabled, Ban], ['Verified email', counts.verified, MailCheck]].map(([label, value, Icon]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-500">{label}</span><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Icon size={18} /></span></div><p className="mt-3 text-2xl font-black text-slate-950">{value}</p></div>)}
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <label className="relative min-w-0 flex-1"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, email or user ID..." className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm font-semibold outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10" /></label>
-          <div className="grid grid-cols-2 gap-2 sm:flex"><label className="relative"><Filter size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 sm:w-36"><option value="all">All status</option><option value="active">Active</option><option value="disabled">Disabled</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" /></label><label className="relative"><select value={verification} onChange={(event) => setVerification(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-9 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 sm:w-40"><option value="all">All email status</option><option value="verified">Verified</option><option value="unverified">Unverified</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" /></label></div>
-        </div>
-
-        {selected.size > 0 && <div className="mt-3 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-3 sm:flex-row sm:items-center"><p className="text-sm font-extrabold text-blue-900">{selected.size} selected</p><div className="flex flex-wrap gap-2 sm:ml-auto"><button type="button" disabled={busyId === "bulk"} onClick={() => bulkStatus(false)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 hover:bg-emerald-50"><Check size={15} /> Activate</button><button type="button" disabled={busyId === "bulk"} onClick={() => bulkStatus(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 text-xs font-black text-amber-700 hover:bg-amber-50"><Ban size={15} /> Deactivate</button><button type="button" onClick={() => setSelected(new Set())} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-50"><X size={15} /> Clear</button></div></div>}
-      </div>
-
-      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {loading ? <div className="flex min-h-80 items-center justify-center"><div className="text-center"><div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" /><p className="mt-3 text-sm font-bold text-slate-500">Loading user accounts...</p></div></div> : filtered.length === 0 ? <div className="flex min-h-80 flex-col items-center justify-center px-6 text-center"><Users size={34} className="text-slate-300" /><h2 className="mt-3 text-lg font-black text-slate-800">No users found</h2><p className="mt-1 text-sm text-slate-500">Try changing your search or filters.</p></div> : <>
-          <div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[980px] text-left"><thead className="border-b border-slate-200 bg-slate-50/80"><tr><th className="w-12 px-4 py-3"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible users" /></th><th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-slate-400">User</th><th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-slate-400">Status</th><th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-slate-400">Email</th><th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-slate-400">Courses</th><th className="px-4 py-3 text-[11px] font-black uppercase tracking-wider text-slate-400">Last login</th><th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-wider text-slate-400">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((user) => <tr key={user.id} className="transition hover:bg-slate-50/70"><td className="px-4 py-4"><input type="checkbox" checked={selected.has(user.id)} onChange={() => toggleSelected(user.id)} aria-label={`Select ${user.email}`} /></td><td className="px-4 py-4"><div className="flex min-w-[260px] items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-50 text-xs font-black text-blue-700">{user.photoUrl ? <img src={user.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(user)}</div><div className="min-w-0"><p className="truncate text-sm font-black text-slate-900">{user.displayName || "Unnamed user"}</p><p className="max-w-[250px] truncate font-mono text-[10px] text-slate-400">{user.id}</p></div></div></td><td className="px-4 py-4"><div className="flex flex-wrap gap-1.5"><span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black ${user.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{user.disabled ? "Disabled" : "Active"}</span>{user.emailVerified ? <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700"><MailCheck size={11} /> Verified</span> : <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Unverified</span>}</div></td><td className="px-4 py-4"><p className="max-w-[230px] truncate text-sm font-semibold text-slate-700">{user.email || "—"}</p><p className="mt-1 text-[10px] font-bold text-slate-400">{user.providers?.join(", ") || "password"}</p></td><td className="px-4 py-4"><span className="text-sm font-black text-slate-800">{user.paidCourses || 0}</span></td><td className="px-4 py-4 text-xs font-semibold text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-4 py-4"><div className="flex justify-end gap-1.5"><button type="button" onClick={() => openEdit(user)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-black text-slate-700 hover:border-blue-200 hover:text-blue-700"><Edit3 size={14} /> Edit</button><button type="button" disabled={busyId === user.id} onClick={() => toggleUser(user)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-black text-slate-700 hover:border-amber-200 hover:text-amber-700"><Ban size={14} /> {user.disabled ? "Activate" : "Disable"}</button>{!user.emailVerified && <button type="button" disabled={busyId === user.id} onClick={() => verifyUser(user)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-black text-slate-700 hover:border-blue-200 hover:text-blue-700"><MailCheck size={14} /> Verify</button>}<button type="button" disabled={busyId === user.id} onClick={() => setConfirmDelete(user)} className="inline-flex h-9 items-center justify-center rounded-lg border border-red-100 bg-red-50 px-2.5 text-xs font-black text-red-600 hover:bg-red-100"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
-          <div className="divide-y divide-slate-100 lg:hidden">{filtered.map((user) => <article key={user.id} className="p-4 sm:p-5"><div className="flex items-start gap-3"><input type="checkbox" className="mt-2" checked={selected.has(user.id)} onChange={() => toggleSelected(user.id)} aria-label={`Select ${user.email}`} /><div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-50 text-xs font-black text-blue-700">{user.photoUrl ? <img src={user.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(user)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-slate-900">{user.displayName || "Unnamed user"}</p><p className="truncate text-xs font-semibold text-slate-500">{user.email || "No email"}</p><p className="mt-1 truncate font-mono text-[9px] text-slate-400">{user.id}</p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${user.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{user.disabled ? "Disabled" : "Active"}</span></div><div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-xs"><div><span className="text-slate-400">Email</span><p className="mt-0.5 font-bold text-slate-700">{user.emailVerified ? "Verified" : "Not verified"}</p></div><div><span className="text-slate-400">Paid courses</span><p className="mt-0.5 font-bold text-slate-700">{user.paidCourses || 0}</p></div><div className="col-span-2"><span className="text-slate-400">Last login</span><p className="mt-0.5 font-bold text-slate-700">{formatDate(user.lastLoginAt)}</p></div></div><div className="mt-3 grid grid-cols-2 gap-2 sm:flex"><button type="button" onClick={() => openEdit(user)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700"><Edit3 size={14} /> Edit</button><button type="button" disabled={busyId === user.id} onClick={() => toggleUser(user)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700"><Ban size={14} /> {user.disabled ? "Activate" : "Disable"}</button>{!user.emailVerified && <button type="button" disabled={busyId === user.id} onClick={() => verifyUser(user)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs font-black text-blue-700"><MailCheck size={14} /> Verify</button>}<button type="button" disabled={busyId === user.id} onClick={() => setConfirmDelete(user)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-red-100 bg-red-50 px-3 text-xs font-black text-red-600"><Trash2 size={14} /> Delete</button></div></article>)}</div>
-        </>}
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2 text-xs font-semibold text-slate-400 sm:flex-row sm:items-center sm:justify-between"><span>Showing {filtered.length} of {users.length} accounts</span><span>Administrator accounts are protected from user-level deletion.</span></div>
-    </div>
-
-    {toast && <div className={`fixed bottom-5 left-4 right-4 z-[120] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl ${toast.type === "error" ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`} role="status"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/70">{toast.type === "error" ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}</span><span className="flex-1">{toast.message}</span><button type="button" onClick={() => setToast(null)} aria-label="Dismiss"><X size={17} /></button></div>}
-
-    {editing && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5"><div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:rounded-3xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6"><div><p className="text-lg font-black text-slate-950">Edit user</p><p className="mt-0.5 text-xs font-semibold text-slate-400">Update account details and access.</p></div><button type="button" onClick={() => setEditing(null)} className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" aria-label="Close"><X size={18} /></button></div><form onSubmit={saveUser} className="space-y-5 p-5 sm:p-6"><div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"><div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-blue-100 text-sm font-black text-blue-700">{form.photoUrl ? <img src={form.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(editing)}</div><div className="min-w-0"><p className="truncate text-sm font-black text-slate-900">{editing.email}</p><p className="font-mono text-[9px] text-slate-400">{editing.id}</p></div></div><label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Display name</span><input value={form.displayName} onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" /></label><label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Email address</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" required /></label><label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Profile photo URL</span><input value={form.photoUrl} onChange={(event) => setForm((current) => ({ ...current, photoUrl: event.target.value }))} placeholder="https://..." className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10" /></label><div className="grid gap-3 sm:grid-cols-2"><label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3"><input type="checkbox" checked={form.emailVerified} onChange={(event) => setForm((current) => ({ ...current, emailVerified: event.target.checked }))} /><span><span className="block text-sm font-black text-slate-800">Email verified</span><span className="block text-xs text-slate-400">Trust this address</span></span></label><label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3"><input type="checkbox" checked={!form.disabled} onChange={(event) => setForm((current) => ({ ...current, disabled: !event.target.checked }))} /><span><span className="block text-sm font-black text-slate-800">Account active</span><span className="block text-xs text-slate-400">Allow sign-in</span></span></label></div><div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditing(null)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-extrabold text-white shadow-lg shadow-blue-600/20 disabled:opacity-60">{saving && <RefreshCw size={16} className="animate-spin" />} Save changes</button></div></form></div></div>}
-
-    {confirmDelete && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600"><AlertTriangle size={23} /></div><h2 className="mt-4 text-xl font-black text-slate-950">Delete this account?</h2><p className="mt-2 text-sm leading-6 text-slate-500">This permanently removes the Firebase login for <strong className="text-slate-800">{confirmDelete.email}</strong>. Course, payment and certificate history is retained for records.</p><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setConfirmDelete(null)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700">Cancel</button><button type="button" disabled={busyId === confirmDelete.id} onClick={() => deleteOne(confirmDelete)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-extrabold text-white disabled:opacity-60"><Trash2 size={16} /> Delete permanently</button></div></div></div>}
+  return <div className="min-h-[calc(100vh-150px)] bg-slate-50 px-3 py-6 sm:px-5 lg:px-8 lg:py-9"><div className="mx-auto max-w-[1480px]">
+    <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[.16em] text-blue-700"><UserCog size={14}/> Administration</div><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Users & Profiles</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Complete learner directory, profile analytics, categories, filters and full user detail management.</p></div><button onClick={()=>load(true)} disabled={refreshing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm"><RefreshCw size={17} className={refreshing?"animate-spin":""}/> Refresh</button></div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Users" value={stats.total} icon={Users}/><Metric label="Active" value={stats.active} icon={CheckCircle2}/><Metric label="Verified" value={stats.verified} icon={MailCheck}/><Metric label="Avg profile" value={`${stats.complete}%`} icon={UserCog}/></div>
+    <div className="mt-5 grid gap-4 lg:grid-cols-4"><BarChart title="Gender" icon={Users} rows={countBy(filtered,"gender")}/><BarChart title="Marital status" icon={Heart} rows={countBy(filtered,"maritalStatus")}/><BarChart title="Countries" icon={Globe2} rows={countBy(filtered,"country")}/><BarChart title="Cities" icon={MapPin} rows={countBy(filtered,"city")}/></div>
+    <div className="mt-4 grid gap-4 lg:grid-cols-3"><BarChart title="Education" icon={GraduationCap} rows={countBy(filtered,"education")}/><BarChart title="Current study" icon={GraduationCap} rows={countBy(filtered,"currentStudy")}/><BarChart title="Profession" icon={BriefcaseBusiness} rows={countBy(filtered,"profession")}/></div>
+    <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"><div className="flex flex-col gap-3 xl:flex-row xl:items-center"><label className="relative min-w-0 flex-1"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, email, username, city, education, study, profession..." className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-blue-400 focus:bg-white"/></label><div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:flex"><FilterSelect value={gender} onChange={setGender} all="Gender" options={options.genders}/><FilterSelect value={marital} onChange={setMarital} all="Marital" options={options.marital}/><FilterSelect value={country} onChange={setCountry} all="Country" options={options.countries}/><FilterSelect value={city} onChange={setCity} all="City" options={options.cities}/><FilterSelect value={status} onChange={setStatus} all="Status" options={["active","disabled"]}/></div></div></div>
+    <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">{loading?<div className="flex min-h-80 items-center justify-center"><RefreshCw className="animate-spin text-blue-600"/></div>:filtered.length===0?<div className="flex min-h-80 flex-col items-center justify-center text-center"><Users className="text-slate-300" size={34}/><p className="mt-3 font-black text-slate-800">No users match these filters</p></div>:<><div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[1250px] text-left"><thead className="border-b border-slate-200 bg-slate-50"><tr>{["User","Gender","Age","Location","Marital","Education / Study","Profile","Status","Action"].map(x=><th key={x} className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400">{x}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{filtered.map(u=><tr key={u.id} className="hover:bg-slate-50/80"><td className="px-4 py-4"><div className="flex items-center gap-3"><Avatar u={u}/><div className="min-w-0"><p className="truncate text-sm font-black text-slate-900">{u.displayName||"Unnamed user"}</p><p className="truncate text-xs text-slate-400">{u.email}</p></div></div></td><td className="px-4 py-4 text-xs font-bold text-slate-600">{u.gender||"—"}</td><td className="px-4 py-4 text-xs font-bold text-slate-600">{u.age||"—"}</td><td className="px-4 py-4 text-xs font-bold text-slate-600">{[u.city,u.country].filter(Boolean).join(", ")||"—"}</td><td className="px-4 py-4 text-xs font-bold text-slate-600">{u.maritalStatus||"—"}</td><td className="max-w-[220px] px-4 py-4 text-xs font-bold text-slate-600">{[u.education,u.currentStudy].filter(Boolean).join(" • ")||"—"}</td><td className="px-4 py-4"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">{u.profileCompletion||0}%</span></td><td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${u.disabled?"bg-red-50 text-red-700":"bg-emerald-50 text-emerald-700"}`}>{u.disabled?"Disabled":"Active"}</span></td><td className="px-4 py-4"><div className="flex gap-2"><button onClick={()=>setSelected(u)} className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700"><Eye size={14}/> View</button><button onClick={()=>openEdit(u)} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-black text-white">Edit</button></div></td></tr>)}</tbody></table></div><div className="grid gap-3 p-3 lg:hidden">{filtered.map(u=><article key={u.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-start gap-3"><Avatar u={u}/><div className="min-w-0 flex-1"><p className="font-black text-slate-900">{u.displayName||"Unnamed user"}</p><p className="truncate text-xs text-slate-400">{u.email}</p><p className="mt-2 text-xs font-bold text-slate-500">{[u.gender,u.age&&`${u.age}y`,u.city,u.country].filter(Boolean).join(" • ")||"No profile details"}</p></div><span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">{u.profileCompletion||0}%</span></div><div className="mt-4 flex gap-2"><button onClick={()=>setSelected(u)} className="flex-1 rounded-xl border py-2 text-xs font-black">View full profile</button><button onClick={()=>openEdit(u)} className="flex-1 rounded-xl bg-blue-600 py-2 text-xs font-black text-white">Edit</button></div></article>)}</div></>}</div>
+    {toast&&<div className="fixed bottom-5 right-5 z-[100] rounded-xl border border-slate-200 bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-2xl">{toast}</div>}
+    {selected&&<ProfileModal user={selected} onClose={()=>setSelected(null)} onEdit={()=>openEdit(selected)} onToggle={()=>toggle(selected)}/>} {editing&&<EditModal user={editing} form={form} update={update} onClose={()=>setEditing(null)} onSave={save} saving={saving}/>} 
   </div>;
 }
+function Metric({label,value,icon:Icon}){return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-500">{label}</span><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Icon size={18}/></span></div><p className="mt-3 text-2xl font-black text-slate-950">{value}</p></div>}
+function FilterSelect({value,onChange,all,options}){return <label className="relative"><select value={value} onChange={e=>onChange(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-8 text-xs font-black text-slate-700 outline-none focus:border-blue-400"><option value="all">All {all}</option>{options.map(x=><option key={x} value={x}>{x}</option>)}</select><ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"/></label>}
+function Avatar({u}){return u.photoUrl?<img src={u.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"/>:<span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">{initials(u)}</span>}
+function ProfileModal({user,onClose,onEdit,onToggle}){const rows=[["Email",user.email], ["Username",user.username], ["Phone",user.phone], ["Gender",user.gender], ["Date of birth",user.dateOfBirth], ["Age",user.age], ["Marital status",user.maritalStatus], ["City",user.city], ["Country",user.country], ["Address",user.address], ["Education",user.education], ["Current study",user.currentStudy], ["Institution",user.institution], ["Profession",user.profession], ["Occupation",user.occupation], ["Skills",Array.isArray(user.skills)?user.skills.join(", "):""], ["Languages",Array.isArray(user.languages)?user.languages.join(", "):""], ["Interests",Array.isArray(user.interests)?user.interests.join(", "):""]]; return <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><div className="mx-auto max-w-4xl rounded-3xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b p-5"><div className="flex items-center gap-3"><Avatar u={user}/><div><h2 className="text-xl font-black text-slate-950">{user.displayName||"Unnamed user"}</h2><p className="text-xs font-bold text-slate-400">Complete learner profile</p></div></div><button onClick={onClose} className="rounded-xl border p-2"><X size={19}/></button></div><div className="p-5 sm:p-7"><div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl bg-blue-50 p-4"><p className="text-[10px] font-black uppercase text-blue-500">Profile completion</p><p className="mt-1 text-2xl font-black text-blue-800">{user.profileCompletion||0}%</p></div><div className="rounded-2xl bg-emerald-50 p-4"><p className="text-[10px] font-black uppercase text-emerald-500">Courses</p><p className="mt-1 text-2xl font-black text-emerald-800">{user.paidCourses||0}</p></div><div className="rounded-2xl bg-violet-50 p-4"><p className="text-[10px] font-black uppercase text-violet-500">Assessments</p><p className="mt-1 text-2xl font-black text-violet-800">{user.assessmentAttempts||0}</p></div></div><div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5"><h3 className="font-black text-slate-900">About</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{user.bio||"No bio provided yet."}</p></div><div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">{rows.map(([label,value])=><div key={label}><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 break-words text-sm font-bold text-slate-800">{value||"—"}</p></div>)}</div><div className="mt-6 flex flex-wrap gap-2"><button onClick={onEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white"><UserCog size={17}/> Edit profile</button><button onClick={onToggle} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-black text-slate-700">{user.disabled?<CheckCircle2 size={17}/> : <Ban size={17}/>} {user.disabled?"Activate":"Deactivate"}</button></div></div></div></div>}
+function EditModal({user,form,update,onClose,onSave,saving}){return <div className="fixed inset-0 z-[95] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><form onSubmit={onSave} className="mx-auto max-w-5xl rounded-3xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b p-5"><div><h2 className="text-xl font-black">Edit User Profile</h2><p className="text-xs text-slate-400">Update all profile categories from admin.</p></div><button type="button" onClick={onClose} className="rounded-xl border p-2"><X size={19}/></button></div><div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3"><TextField label="Full name" value={form.displayName} onChange={v=>update("displayName",v)}/><TextField label="Email" value={form.email} onChange={v=>update("email",v)}/><TextField label="Username" value={form.username} onChange={v=>update("username",v)}/><TextField label="Phone" value={form.phone} onChange={v=>update("phone",v)}/><SelectField label="Gender" value={form.gender} onChange={v=>update("gender",v)} options={["Male","Female","Other","Prefer not to say"]}/><SelectField label="Marital status" value={form.maritalStatus} onChange={v=>update("maritalStatus",v)} options={["Single","Married","Engaged","Divorced","Widowed","Prefer not to say"]}/><TextField label="Date of birth" value={form.dateOfBirth} onChange={v=>update("dateOfBirth",v)}/><TextField label="City" value={form.city} onChange={v=>update("city",v)}/><TextField label="Country" value={form.country} onChange={v=>update("country",v)}/><TextField label="Address" value={form.address} onChange={v=>update("address",v)}/><TextField label="Education" value={form.education} onChange={v=>update("education",v)}/><TextField label="Current study" value={form.currentStudy} onChange={v=>update("currentStudy",v)}/><TextField label="Institution / University" value={form.institution} onChange={v=>update("institution",v)}/><TextField label="Profession" value={form.profession} onChange={v=>update("profession",v)}/><TextField label="Occupation" value={form.occupation} onChange={v=>update("occupation",v)}/><TextField label="Profile photo URL" value={form.photoUrl} onChange={v=>update("photoUrl",v)}/><div className="sm:col-span-2 lg:col-span-3"><TextField label="Bio" value={form.bio} onChange={v=>update("bio",v)} area/></div></div><div className="flex flex-wrap items-center gap-3 border-t bg-slate-50 p-5"><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={Boolean(form.emailVerified)} onChange={e=>update("emailVerified",e.target.checked)}/> Email verified</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={Boolean(form.disabled)} onChange={e=>update("disabled",e.target.checked)}/> Disabled</label><div className="ml-auto flex gap-2"><button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm font-black">Cancel</button><button disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"><Save size={16}/>{saving?"Saving...":"Save profile"}</button></div></div></form></div>}
