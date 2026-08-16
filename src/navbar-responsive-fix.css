@@ -50,11 +50,12 @@ header > div > nav > div:last-child > a[href="/profile"] {
   border-radius: 12px !important;
 }
 
-header > div > nav > div:last-child > a[href="/profile"] > span {
+header > div > nav > div:last-child > a[href="/profile"] > span:last-child {
   display: none !important;
 }
 
-header > div > nav > div:last-child > a[href="/profile"] img {
+header > div > nav > div:last-child > a[href="/profile"] > img,
+header > div > nav > div:last-child > a[href="/profile"] > span:first-child {
   width: 34px !important;
   height: 34px !important;
 }
