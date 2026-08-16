@@ -51,6 +51,8 @@ export default async function handler(req, res) {
     const successful = errCode === "000" || errCode === "00";
 
     const verifiedPayment = validHash && successful && amountMatches && String(order.paymentProvider || "payfast") === "payfast";
+    const verificationState = verifiedPayment ? "verified" : "failed";
+    const now = new Date();
 
     await firestoreSet(`orders/${orderId}`, {
       ...order,
@@ -64,8 +66,27 @@ export default async function handler(req, res) {
       },
       transactionAmount: Number.isFinite(transactionAmount) ? transactionAmount : null,
       status: verifiedPayment ? "paid" : (order.status === "paid" ? "paid" : "payment_failed"),
-      paidAt: verifiedPayment ? new Date() : (order.paidAt || null),
-      updatedAt: new Date(),
+      paidAt: verifiedPayment ? (order.paidAt || now) : (order.paidAt || null),
+      updatedAt: now,
+    });
+
+    await firestoreSet(`adminNotifications/payment-${orderId}-${verificationState}`, {
+      type: "payment",
+      event: verifiedPayment ? "gateway_payment_verified" : "gateway_payment_failed",
+      title: verifiedPayment ? "Payment received & verified" : "Payment verification failed",
+      message: verifiedPayment
+        ? `PayFast verified ${moneyLabel(expectedAmount)} for ${order.courseTitle || "Course"}. Course access can be unlocked automatically.`
+        : `PayFast callback for ${order.courseTitle || "Course"} did not pass payment verification. Review the order before taking action.`,
+      orderId,
+      userId: order.userId || "",
+      customerEmail: order.customerEmail || "",
+      courseId: order.courseId || "",
+      courseTitle: order.courseTitle || "Course",
+      amount: expectedAmount,
+      transactionAmount: Number.isFinite(transactionAmount) ? transactionAmount : null,
+      paymentMethod: "payfast",
+      read: false,
+      createdAt: now,
     });
 
     return json(res, 200, { received: true, verified: verifiedPayment, orderId });
@@ -73,4 +94,8 @@ export default async function handler(req, res) {
     console.error("PayFast callback error:", error?.message || error);
     return json(res, 500, { error: "Unable to process callback" });
   }
+}
+
+function moneyLabel(value) {
+  return `Rs. ${Math.round(Number(value || 0)).toLocaleString("en-PK")}`;
 }
