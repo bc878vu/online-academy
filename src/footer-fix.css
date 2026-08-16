@@ -1,0 +1,164 @@
+/* Footer layout correction
+   The previous footer rules targeted the grid wrapper itself instead of
+   individual columns, which created the large boxed footer seen on mobile.
+*/
+
+footer {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* The first direct child is the 4-column navigation grid. Keep it clean. */
+footer > div > div:first-child {
+  position: static !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+footer > div > div:first-child::before,
+footer > div > div:first-child::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Do not turn every footer link into a card. */
+footer > div > div:first-child a,
+footer > div > div:first-child button {
+  position: static !important;
+  min-height: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none;
+}
+
+footer > div > div:first-child a:hover,
+footer > div > div:first-child button:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: translateX(3px);
+}
+
+/* Correct column styling. */
+footer > div > div:first-child > div {
+  min-width: 0;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+footer > div > div:first-child > div:first-child {
+  padding: 0 !important;
+}
+
+footer > div > div:first-child > div:not(:first-child) {
+  padding: 0 !important;
+}
+
+/* Bottom copyright bar remains a simple divider, never a grid/card. */
+footer > div > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 32px !important;
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (min-width: 1024px) {
+  footer > div {
+    padding-top: 48px !important;
+    padding-bottom: 28px !important;
+  }
+
+  footer > div > div:first-child {
+    display: grid !important;
+    grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(130px, 1fr)) !important;
+    gap: 42px !important;
+    align-items: start;
+  }
+}
+
+@media (max-width: 1023px) {
+  footer > div {
+    padding: 34px 20px 22px !important;
+  }
+
+  footer > div > div:first-child {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 28px 34px !important;
+  }
+
+  footer > div > div:first-child > div:first-child {
+    grid-column: 1 / -1;
+    padding-bottom: 4px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  footer > div {
+    padding: 28px 18px 18px !important;
+  }
+
+  footer > div > div:first-child {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  footer > div > div:first-child > div:first-child {
+    grid-column: auto;
+    padding-bottom: 2px !important;
+  }
+
+  footer > div > div:first-child > div:not(:first-child) > p {
+    margin-bottom: 10px !important;
+  }
+
+  footer > div > div:first-child a,
+  footer > div > div:first-child button {
+    display: block;
+    width: fit-content !important;
+    min-height: 32px !important;
+    padding: 5px 0 !important;
+    font-size: 14px !important;
+    line-height: 1.35;
+  }
+
+  footer > div > div:last-child {
+    display: block;
+    margin-top: 24px !important;
+    padding-top: 15px !important;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 360px) {
+  footer > div {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  footer > div > div:first-child {
+    gap: 20px !important;
+  }
+
+  footer > div > div:first-child a,
+  footer > div > div:first-child button {
+    font-size: 13px !important;
+  }
+}
