@@ -11,7 +11,7 @@ const PAYMENT_METHODS = new Set(["payfast"]);
 
 function json(res, status, body) {
   res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(body));
 }
@@ -57,6 +57,30 @@ export default async function handler(req, res) {
     const originalAmount = Number(courseData.price || 0);
     const isPaid = courseData.isPaid === true || originalAmount > 0;
     if (!isPaid || originalAmount <= 0) return json(res, 400, { error: "This course is free" });
+
+    // One verified purchase unlocks the course for this account permanently
+    // until an administrator processes a real gateway refund.
+    const existingPaid = await firestoreQuery("orders", [
+      { field: "userId", value: user.localId },
+      { field: "courseId", value: courseId },
+      { field: "status", value: "paid" },
+      { field: "paymentVerified", value: true },
+    ]).catch(() => []);
+    const priorPayment = existingPaid[0]?.fields;
+    if (priorPayment?.orderId) {
+      return json(res, 200, {
+        alreadyPaid: true,
+        orderId: priorPayment.orderId,
+        courseId,
+        courseTitle: courseData.title || "Untitled Course",
+        finalAmount: Number(priorPayment.finalAmount || originalAmount),
+        currency: "PKR",
+        paymentProvider: "payfast",
+        paymentMethod: "payfast",
+        status: "paid",
+        paymentVerified: true,
+      });
+    }
 
     let coupon = null;
     let discountAmount = 0;
@@ -119,6 +143,7 @@ export default async function handler(req, res) {
     });
 
     return json(res, 200, {
+      alreadyPaid: false,
       orderId,
       courseId,
       courseTitle: courseData.title || "Untitled Course",
