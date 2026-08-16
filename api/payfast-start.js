@@ -18,6 +18,16 @@ function requiredEnv(name) {
   return value;
 }
 
+async function fetchWithTimeout(url, options, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
 
@@ -35,7 +45,11 @@ export default async function handler(req, res) {
     const order = orderDoc.fields;
 
     if (order.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
-    if (order.status !== "pending") return json(res, 400, { error: `Order is already ${order.status}` });
+    if (order.status === "paid") return json(res, 200, { alreadyPaid: true, orderId, status: "paid" });
+    if (order.status === "refunded") return json(res, 409, { error: "This order has already been refunded" });
+    if (!["pending", "payment_started"].includes(String(order.status || ""))) {
+      return json(res, 400, { error: `Order is already ${order.status}` });
+    }
 
     const amount = Number(order.finalAmount || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -55,13 +69,11 @@ export default async function handler(req, res) {
     const merchantName = String(process.env.PAYFAST_MERCHANT_NAME || "Online Academy").trim();
     const siteUrl = String(process.env.SITE_URL || "https://online-academy-plum.vercel.app").replace(/\/$/, "");
 
-    // PayFast's hosted-checkout token must be bound to the same basket/order,
-    // amount and currency that are posted to the checkout form.
-    const tokenResponse = await fetch(tokenUrl, {
+    const tokenResponse = await fetchWithTimeout(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Online-Academy-Payments/1.0",
+        "User-Agent": "Online-Academy-Payments/1.1",
       },
       body: new URLSearchParams({
         MERCHANT_ID: merchantId,
@@ -72,11 +84,14 @@ export default async function handler(req, res) {
       }),
     });
 
-    if (!tokenResponse.ok) {
-      throw new Error(`PayFast token request failed: ${tokenResponse.status}`);
-    }
+    if (!tokenResponse.ok) throw new Error(`PayFast token request failed: ${tokenResponse.status}`);
 
-    const tokenData = await tokenResponse.json();
+    let tokenData = {};
+    try {
+      tokenData = await tokenResponse.json();
+    } catch {
+      throw new Error("PayFast returned an invalid authentication response");
+    }
     const token = tokenData.ACCESS_TOKEN || tokenData.access_token || tokenData.token;
     if (!token) throw new Error("PayFast did not return an access token");
 
@@ -92,6 +107,7 @@ export default async function handler(req, res) {
       status: "payment_started",
       provider: "payfast",
       providerBasketId: orderId,
+      paymentStartedAt: order.paymentStartedAt || new Date(),
       updatedAt: new Date(),
     });
 
@@ -119,9 +135,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("PayFast start error:", error?.message || error);
-    const safe = /Missing PAYFAST_/.test(error?.message || "")
-      ? "Payment gateway is not configured yet. Add the PayFast merchant environment variables in Vercel."
-      : "Unable to start payment. Please try again.";
-    return json(res, 500, { error: safe });
+    // Never expose merchant configuration details to customers.
+    return json(res, 503, { error: "Secure payment is temporarily unavailable. Please try again shortly." });
   }
 }
