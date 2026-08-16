@@ -91,6 +91,21 @@ service cloud.firestore {
       allow create: if validPublicMessage();
       allow update, delete: if isAdmin();
     }
+
+    // Admin-only finance, billing, service configuration and audit logs.
+    match /financeExpenses/{expenseId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /financeBills/{billId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /financeLogs/{logId} {
+      allow read, create: if isAdmin();
+    }
+    match /customServices/{serviceId} {
+      allow read, write: if isAdmin();
+    }
+
     match /{document=**} { allow read, write: if false; }
   }
 }
