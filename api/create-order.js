@@ -7,6 +7,7 @@ import {
 } from "./_firebase.js";
 
 const MAX_COUPON_DISCOUNT = 1000000;
+const PAYMENT_METHODS = new Set(["payfast", "jazzcash", "easypaisa", "bank_transfer"]);
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -43,7 +44,9 @@ export default async function handler(req, res) {
     const user = await verifyFirebaseIdToken(idToken);
     const courseId = String(req.body?.courseId || "").trim();
     const couponCode = normalizeCode(req.body?.couponCode);
+    const paymentMethod = String(req.body?.paymentMethod || "payfast").trim().toLowerCase();
     if (!courseId) return json(res, 400, { error: "Course ID is required" });
+    if (!PAYMENT_METHODS.has(paymentMethod)) return json(res, 400, { error: "Unsupported payment method" });
 
     const course = await firestoreGet(`courses/${courseId}`);
     if (!course) return json(res, 404, { error: "Course not found" });
@@ -92,6 +95,7 @@ export default async function handler(req, res) {
     const orderId = `OA-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     const now = new Date();
     const isZeroAmount = finalAmount <= 0;
+    const actualMethod = isZeroAmount ? "coupon" : paymentMethod;
 
     await firestoreSet(`orders/${orderId}`, {
       orderId,
@@ -103,7 +107,8 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       couponCode: couponCode || "",
-      paymentProvider: isZeroAmount ? "coupon" : "payfast",
+      paymentProvider: actualMethod,
+      paymentMethod: actualMethod,
       status: isZeroAmount ? "paid" : "pending",
       paidAt: isZeroAmount ? now : null,
       createdAt: now,
@@ -118,7 +123,8 @@ export default async function handler(req, res) {
       discountAmount,
       finalAmount,
       currency: "PKR",
-      paymentProvider: isZeroAmount ? "coupon" : "payfast",
+      paymentProvider: actualMethod,
+      paymentMethod: actualMethod,
       status: isZeroAmount ? "paid" : "pending",
     });
   } catch (error) {
