@@ -105,6 +105,10 @@ service cloud.firestore {
     match /customServices/{serviceId} {
       allow read, write: if isAdmin();
     }
+    match /adminNotifications/{notificationId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
 
     match /{document=**} { allow read, write: if false; }
   }
