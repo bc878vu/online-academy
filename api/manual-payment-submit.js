@@ -1,4 +1,4 @@
-import { firestoreQuery, firestoreGet, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
+import { firestoreGet, firestoreSet, verifyFirebaseIdToken } from "./_firebase.js";
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -11,18 +11,16 @@ function value(name, fallback = "") { return String(process.env[name] || fallbac
 
 function paymentMethods() {
   const configured = value("PAYFAST_MERCHANT_ID") !== "" && value("PAYFAST_SECURED_KEY") !== "";
-  return [
-    {
-      id: "payfast",
-      name: "PayFast Secure Checkout",
-      type: "gateway",
-      description: configured
-        ? "Real-time gateway payment. The bank/wallet/card balance is checked by PayFast and only a verified successful transaction unlocks the course."
-        : "Secure gateway payment — merchant configuration is required.",
-      enabled: true,
-      configured,
-    },
-  ];
+  return [{
+    id: "payfast",
+    name: "PayFast Secure Checkout",
+    type: "gateway",
+    description: configured
+      ? "Real-time gateway payment. The bank/wallet/card balance is checked by PayFast and only a verified successful transaction unlocks the course."
+      : "Secure gateway payment — merchant configuration is required.",
+    enabled: true,
+    configured,
+  }];
 }
 
 export default async function handler(req, res) {
@@ -39,18 +37,22 @@ export default async function handler(req, res) {
 
     const orderDoc = await firestoreGet(`orders/${orderId}`);
     if (!orderDoc) return json(res, 404, { error: "Order not found" });
-    const order = orderDoc.fields;
-    if (order.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
+    if (orderDoc.fields?.userId !== user.localId) return json(res, 403, { error: "Order does not belong to this account" });
 
-    await firestoreQuery("orders", [{ field: "manualReference", value: "__disabled_manual_payment__" }]);
-    await firestoreSet(`orders/${orderId}`, {
-      ...order,
-      status: order.status === "paid" ? "paid" : "payment_failed",
-      paymentProvider: "payfast",
-      paymentMethod: "payfast",
-      providerStatusCode: "MANUAL_DISABLED",
-      providerStatusMessage: "Manual payment references are disabled. Use the real PayFast checkout.",
-      updatedAt: new Date(),
+    await firestoreSet(`adminNotifications/payment-${orderId}-manual-disabled`, {
+      type: "payment",
+      event: "manual_payment_disabled",
+      title: "Manual payment attempt blocked",
+      message: "A manual payment reference was attempted. Manual references are disabled; use the real PayFast gateway so the customer's actual balance and transaction status are verified.",
+      orderId,
+      userId: user.localId,
+      customerEmail: user.email || orderDoc.fields?.customerEmail || "",
+      courseId: orderDoc.fields?.courseId || "",
+      courseTitle: orderDoc.fields?.courseTitle || "Course",
+      amount: Number(orderDoc.fields?.finalAmount || 0),
+      paymentMethod: "manual_disabled",
+      read: false,
+      createdAt: new Date(),
     });
 
     return json(res, 410, { error: "Manual payment references are disabled. Use the real PayFast checkout so the customer's actual account/wallet balance and transaction status are verified by the payment gateway." });
