@@ -38,6 +38,10 @@ export default function Checkout() {
       const idToken = await user.getIdToken();
       const orderResponse = await fetch("/api/create-order", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` }, body: JSON.stringify({ courseId, couponCode, paymentMethod: "payfast" }) });
       const orderData = await orderResponse.json(); if (!orderResponse.ok) throw new Error(orderData.error || "Unable to create order"); setOrder(orderData);
+      if (orderData.alreadyPaid === true || orderData.status === "paid") {
+        navigate(`/courses/${encodeURIComponent(courseId)}`);
+        return;
+      }
       if (Number(orderData.finalAmount) <= 0) throw new Error("A paid course must be completed through the real payment gateway.");
 
       const paymentResponse = await fetch("/api/payfast-start", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` }, body: JSON.stringify({ orderId: orderData.orderId }) });
