@@ -90,6 +90,18 @@ async function requireAdmin(req) {
   return user;
 }
 
+function documentId(name = "") {
+  const parts = String(name).split("/");
+  return parts[parts.length - 1] || "";
+}
+
+function timeValue(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
 async function sendCourseLaunch(req, courseId) {
   const courseDoc = await firestoreGet(`courses/${courseId}`);
   if (!courseDoc) throw Object.assign(new Error("Course not found"), { status: 404 });
@@ -110,11 +122,46 @@ async function sendCourseLaunch(req, courseId) {
   return { sent, alreadySent: false };
 }
 
+async function getPaymentNotifications() {
+  const rows = await firestoreQuery("adminNotifications", [{ field: "type", value: "payment" }]);
+  return rows
+    .map((row) => ({ id: documentId(row.name), ...(row.fields || {}) }))
+    .filter((item) => item.id)
+    .sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt))
+    .slice(0, 50);
+}
+
+async function markPaymentNotificationRead(notificationId, read) {
+  const id = String(notificationId || "").trim();
+  if (!id) throw Object.assign(new Error("Notification ID is required"), { status: 400 });
+  const notificationDoc = await firestoreGet(`adminNotifications/${id}`);
+  if (!notificationDoc) throw Object.assign(new Error("Notification not found"), { status: 404 });
+  const now = new Date();
+  await firestoreSet(`adminNotifications/${id}`, {
+    ...(notificationDoc.fields || {}),
+    read: read === true,
+    readAt: read === true ? now : null,
+    updatedAt: now,
+  });
+  return { ok: true, notificationId: id, read: read === true };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method Not Allowed" });
   try {
-    await requireAdmin(req);
     const action = String(req.body?.action || "").trim();
+
+    if (action === "paymentNotifications") {
+      await requireAdmin(req);
+      return json(res, 200, { ok: true, notifications: await getPaymentNotifications() });
+    }
+
+    if (action === "markPaymentNotificationRead") {
+      await requireAdmin(req);
+      return json(res, 200, await markPaymentNotificationRead(req.body?.notificationId, req.body?.read === true));
+    }
+
+    await requireAdmin(req);
 
     if (action === "courseLaunch") {
       const courseId = String(req.body?.courseId || "").trim();
