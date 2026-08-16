@@ -1,3 +1,5 @@
-# Deployment
+# Vercel deployment
 
-This file is used to trigger the connected Vercel production deployment for the latest `main` branch changes.
+The `main` branch is connected to the Online Academy Vercel project.
+
+Payment hardening keeps the project below the Vercel Hobby 12-serverless-function limit. Paid checkout uses PayFast hosted checkout, server-side verification, persistent user/course entitlement, transaction history and admin refund controls.
