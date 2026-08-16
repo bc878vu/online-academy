@@ -7,6 +7,7 @@ import "./performance.css";
 import "./modern-upgrades.css";
 import "./responsive.css";
 import "./footer-fix.css";
+import "./header-footer-premium.css";
 import App from "./App.jsx";
 import AdminNotificationCenter from "./components/AdminNotificationCenter.jsx";
 import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
