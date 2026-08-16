@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Check, Copy, Download, GraduationCap, Megaphone, Wifi, WifiOff, X } from "lucide-react";
 
 function toMillis(value) {
@@ -38,7 +38,6 @@ function normalizeDestination(value) {
 }
 
 function OfferAction({ offer, className = "" }) {
-  const location = useLocation();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [activated, setActivated] = useState(false);
