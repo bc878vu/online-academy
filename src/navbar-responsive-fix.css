@@ -1,0 +1,159 @@
+/* Final responsive navigation polish. Loaded after the premium header/footer layer. */
+
+/* ---------- DESKTOP / TABLET HEADER ---------- */
+header > div > nav {
+  min-height: 68px !important;
+  gap: 10px !important;
+}
+
+header > div > nav > a:first-child {
+  min-width: 185px !important;
+  gap: 9px !important;
+  padding: 5px 8px 5px 5px !important;
+}
+
+header > div > nav > a:first-child img {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+}
+
+header > div > nav > div:nth-child(2) {
+  gap: 1px !important;
+  padding: 3px !important;
+  border-radius: 14px !important;
+}
+
+header > div > nav > div:nth-child(2) > a,
+header > div > nav > div:nth-child(2) > div > button {
+  min-height: 38px !important;
+  padding-left: 9px !important;
+  padding-right: 9px !important;
+  gap: 6px !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+}
+
+header > div > nav > div:last-child {
+  gap: 6px !important;
+}
+
+/* Profile action = avatar only (no name / "My Profile" text). */
+header > div > nav > div:last-child > a[href="/profile"] {
+  display: inline-flex !important;
+  width: 42px !important;
+  height: 42px !important;
+  max-width: 42px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  border-radius: 12px !important;
+}
+
+header > div > nav > div:last-child > a[href="/profile"] > span {
+  display: none !important;
+}
+
+header > div > nav > div:last-child > a[href="/profile"] img {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+/* Keep the More dropdown compact and usable on smaller desktop widths. */
+header [role="menu"] {
+  width: 18rem !important;
+  max-width: calc(100vw - 24px) !important;
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  header > div > nav > a:first-child {
+    min-width: 160px !important;
+  }
+
+  header > div > nav > a:first-child span > span:last-child {
+    display: none !important;
+  }
+
+  header > div > nav > div:nth-child(2) > a,
+  header > div > nav > div:nth-child(2) > div > button {
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+    font-size: 11px !important;
+  }
+
+  /* Dashboard becomes icon-only at constrained desktop widths. */
+  header > div > nav > div:last-child > a[href="/dashboard"] {
+    width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    font-size: 0 !important;
+  }
+}
+
+/* ---------- MOBILE DRAWER ---------- */
+@media (max-width: 1023px) {
+  header > div > nav {
+    min-height: 64px !important;
+    gap: 6px !important;
+  }
+
+  header > div > nav > a:first-child {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    padding: 4px 6px 4px 3px !important;
+  }
+
+  header > div > nav > a:first-child img {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  header + div[role="dialog"] aside {
+    width: min(300px, 82vw) !important;
+    max-width: 300px !important;
+  }
+
+  header + div[role="dialog"] aside > div:first-child {
+    min-height: 66px !important;
+    padding: 0 12px !important;
+  }
+
+  header + div[role="dialog"] aside > div:nth-child(2) {
+    padding: 12px 10px 16px !important;
+    scrollbar-width: thin;
+  }
+
+  header + div[role="dialog"] aside > div:nth-child(2) a,
+  header + div[role="dialog"] aside > div:nth-child(2) button {
+    min-height: 44px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+  }
+
+  header + div[role="dialog"] aside > div:last-child {
+    padding: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  header > div > nav > a:first-child span > span:last-child {
+    display: none !important;
+  }
+
+  header > div > nav > a:first-child span > span:first-child {
+    font-size: 15px !important;
+  }
+
+  header + div[role="dialog"] aside {
+    width: min(286px, 84vw) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  header *, header + div[role="dialog"] * {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
