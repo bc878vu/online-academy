@@ -1,24 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { AlertCircle, Bell, CheckCircle2, Clock3, Mail, Send, X } from "lucide-react";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const API_PATH = "/api/notifications";
+const PAYMENT_API_PATH = "/api/admin-payment-notifications";
 
-async function callNotificationApi(body) {
+async function getAdminToken() {
   const user = auth.currentUser;
   if (!user) throw new Error("Admin session is not available.");
-  const token = await user.getIdToken();
-  const response = await fetch(API_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
+  return user.getIdToken();
+}
+
+async function callNotificationApi(body) {
+  const token = await getAdminToken();
+  const response = await fetch(API_PATH, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Notification request failed.");
   return data;
+}
+
+async function loadPaymentNotifications() {
+  const token = await getAdminToken();
+  const response = await fetch(PAYMENT_API_PATH, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Unable to load payment notifications.");
+  return Array.isArray(data?.notifications) ? data.notifications : [];
+}
+
+async function setPaymentNotificationRead(notificationId, read = true) {
+  const token = await getAdminToken();
+  const response = await fetch(PAYMENT_API_PATH, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ notificationId, read }) });
+  if (!response.ok) throw new Error("Unable to update notification.");
 }
 
 function asDate(value) {
@@ -54,21 +69,25 @@ export default function AdminNotificationCenter() {
 
   useEffect(() => {
     if (!admin) return undefined;
-    const unsubscribe = onSnapshot(collection(db, "adminNotifications"), (snapshot) => {
-      const items = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() }))
-        .filter((item) => item.type === "payment")
-        .sort((a, b) => (asDate(b.createdAt)?.getTime() || 0) - (asDate(a.createdAt)?.getTime() || 0));
-      setPaymentNotifications(items.slice(0, 30));
-    }, (error) => console.error("Admin payment notifications watcher failed:", error));
-    return unsubscribe;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const items = await loadPaymentNotifications();
+        if (active) setPaymentNotifications(items);
+      } catch (error) {
+        console.error("Admin payment notifications load failed:", error);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [admin]);
 
   useEffect(() => {
     if (!admin) return undefined;
     previousPublished.current = new Map();
     initialized.current = false;
-    const unsubscribe = onSnapshot(collection(db, "courses"), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(auth.app, "courses"), (snapshot) => {
       const current = new Map(previousPublished.current);
       if (!initialized.current) {
         snapshot.docs.forEach((item) => current.set(item.id, item.data()?.published === true));
@@ -96,7 +115,8 @@ export default function AdminNotificationCenter() {
 
   const markRead = async (notificationId) => {
     try {
-      await updateDoc(doc(db, "adminNotifications", notificationId), { read: true, readAt: new Date() });
+      await setPaymentNotificationRead(notificationId, true);
+      setPaymentNotifications((items) => items.map((item) => item.id === notificationId ? { ...item, read: true, readAt: new Date() } : item));
     } catch (error) {
       console.error("Unable to mark notification as read:", error);
     }
@@ -104,7 +124,8 @@ export default function AdminNotificationCenter() {
 
   const markAllRead = async () => {
     const unread = paymentNotifications.filter((item) => item.read !== true);
-    await Promise.all(unread.map((item) => markRead(item.id)));
+    await Promise.all(unread.map((item) => setPaymentNotificationRead(item.id, true).catch((error) => console.error(error))));
+    setPaymentNotifications((items) => items.map((item) => ({ ...item, read: true, readAt: new Date() })));
   };
 
   const sendAnnouncement = async (event) => {
@@ -133,37 +154,22 @@ export default function AdminNotificationCenter() {
 
     {open && <div className="fixed inset-0 z-[210] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm">
       <div className="mx-auto mt-4 w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl sm:mt-10">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
-          <div><p className="text-xs font-black uppercase tracking-[.16em] text-blue-600">Admin Notifications</p><h2 className="mt-1 text-xl font-black text-slate-950">Payments & announcements</h2></div>
-          <button type="button" onClick={() => setOpen(false)} className="rounded-xl p-2 hover:bg-slate-100" aria-label="Close"><X /></button>
-        </div>
-
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><div><p className="text-xs font-black uppercase tracking-[.16em] text-blue-600">Admin Notifications</p><h2 className="mt-1 text-xl font-black text-slate-950">Payments & announcements</h2></div><button type="button" onClick={() => setOpen(false)} className="rounded-xl p-2 hover:bg-slate-100" aria-label="Close"><X /></button></div>
         <div className="max-h-[78vh] overflow-y-auto p-5 sm:p-6">
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs font-black uppercase tracking-wider text-amber-700">Payment activity</p><h3 className="mt-1 text-lg font-black text-slate-950">Incoming payment alerts</h3><p className="mt-1 text-xs leading-5 text-slate-600">Verified PayFast payments and submitted manual payment references appear here in real time.</p></div>
-              {unreadCount > 0 && <button type="button" onClick={markAllRead} className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm ring-1 ring-amber-200">Mark all read</button>}
-            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-amber-700">Payment activity</p><h3 className="mt-1 text-lg font-black text-slate-950">Incoming payment alerts</h3><p className="mt-1 text-xs leading-5 text-slate-600">Verified PayFast payments and submitted manual payment references appear here within a few seconds.</p></div>{unreadCount > 0 && <button type="button" onClick={markAllRead} className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm ring-1 ring-amber-200">Mark all read</button>}</div>
             <div className="mt-4 space-y-2">
               {paymentNotifications.length === 0 && <div className="rounded-xl border border-dashed border-amber-200 bg-white/70 p-5 text-center text-sm font-semibold text-slate-500">No payment notifications yet.</div>}
               {paymentNotifications.map((item) => {
                 const verified = item.event === "gateway_payment_verified";
                 const failed = item.event === "gateway_payment_failed";
                 const Icon = verified ? CheckCircle2 : failed ? AlertCircle : Clock3;
-                return <button type="button" key={item.id} onClick={() => markRead(item.id)} className={`w-full rounded-2xl border p-4 text-left transition hover:border-blue-200 hover:bg-white ${item.read === true ? "border-slate-200 bg-white" : "border-blue-200 bg-blue-50/70"}`}>
-                  <div className="flex items-start gap-3">
-                    <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${verified ? "bg-emerald-100 text-emerald-700" : failed ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}><Icon size={18} /></span>
-                    <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-black text-slate-900">{item.title || "Payment notification"}</span><span className="text-[10px] font-bold text-slate-400">{timeLabel(item.createdAt)}</span></span><span className="mt-1 block text-xs leading-5 text-slate-600">{item.message}</span><span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-black text-slate-500"><span>{money(item.amount)}</span><span>{item.paymentMethod || "payment"}</span>{item.reference && <span>Ref: {item.reference}</span>}{item.customerEmail && <span>{item.customerEmail}</span>}</span></span>
-                  </div>
-                </button>;
+                return <button type="button" key={item.id} onClick={() => markRead(item.id)} className={`w-full rounded-2xl border p-4 text-left transition hover:border-blue-200 hover:bg-white ${item.read === true ? "border-slate-200 bg-white" : "border-blue-200 bg-blue-50/70"}`}><div className="flex items-start gap-3"><span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${verified ? "bg-emerald-100 text-emerald-700" : failed ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}><Icon size={18} /></span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-black text-slate-900">{item.title || "Payment notification"}</span><span className="text-[10px] font-bold text-slate-400">{timeLabel(item.createdAt)}</span></span><span className="mt-1 block text-xs leading-5 text-slate-600">{item.message}</span><span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-black text-slate-500"><span>{money(item.amount)}</span><span>{item.paymentMethod || "payment"}</span>{item.reference && <span>Ref: {item.reference}</span>}{item.customerEmail && <span>{item.customerEmail}</span>}</span></span></div></button>;
               })}
             </div>
           </section>
 
-          <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-            <div className="flex items-start gap-3"><Mail className="mt-0.5 shrink-0 text-blue-600" size={19} /><p className="text-sm text-slate-600"><b className="text-slate-900">Automatic:</b> new published courses can trigger email notifications. Use the form below for announcements and notes.</p></div>
-          </section>
-
+          <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4"><div className="flex items-start gap-3"><Mail className="mt-0.5 shrink-0 text-blue-600" size={19} /><p className="text-sm text-slate-600"><b className="text-slate-900">Automatic:</b> new published courses can trigger email notifications. Use the form below for announcements and notes.</p></div></section>
           <form onSubmit={sendAnnouncement} className="mt-5 space-y-5">
             <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Send to</span><select value={audience} onChange={(e) => setAudience(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500"><option value="all">All users</option><option value="paid">Paid users</option><option value="free">Free users</option></select></label>
             <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Subject</span><input required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. New notes uploaded" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
