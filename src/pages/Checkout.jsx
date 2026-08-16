@@ -6,13 +6,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 function money(value) { return `Rs. ${Number(value || 0).toLocaleString("en-PK")}`; }
-const fallbackMethods = [
-  { id: "payfast", name: "PayFast Secure Checkout", type: "gateway", description: "Real-time payment through the secure gateway. Your bank/wallet/card balance is checked by the payment provider.", enabled: true },
-];
+const PAYMENT_METHOD = { id: "payfast", name: "PayFast Secure Checkout", type: "gateway", description: "Real-time payment through the secure gateway. Your bank/wallet/card balance is checked by the payment provider.", enabled: true, configured: true };
 
 export default function Checkout() {
   const [searchParams] = useSearchParams(); const navigate = useNavigate(); const courseId = searchParams.get("courseId") || "";
-  const [user, setUser] = useState(undefined); const [course, setCourse] = useState(null); const [methods, setMethods] = useState(fallbackMethods); const [selectedMethod, setSelectedMethod] = useState("payfast"); const [loading, setLoading] = useState(true); const [couponCode, setCouponCode] = useState(""); const [order, setOrder] = useState(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
+  const [user, setUser] = useState(undefined); const [course, setCourse] = useState(null); const [selectedMethod] = useState("payfast"); const [loading, setLoading] = useState(true); const [couponCode, setCouponCode] = useState(""); const [order, setOrder] = useState(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
   useEffect(() => {
@@ -20,23 +18,17 @@ export default function Checkout() {
     const load = async () => {
       if (!courseId) { setMessage("Course information is missing."); setLoading(false); return; }
       try {
-        const [courseSnap, methodResponse] = await Promise.all([
-          getDoc(doc(db, "courses", courseId)),
-          fetch("/api/manual-payment-submit").then((response) => response.ok ? response.json() : null).catch(() => null),
-        ]);
+        const courseSnap = await getDoc(doc(db, "courses", courseId));
         if (!active) return;
         if (!courseSnap.exists()) { setMessage("Course not found."); return; }
         setCourse({ id: courseSnap.id, ...courseSnap.data() });
-        const available = Array.isArray(methodResponse?.methods) ? methodResponse.methods.filter((item) => item.enabled && item.configured !== false) : fallbackMethods;
-        setMethods(available.length ? available : fallbackMethods);
-        if (available.length && !available.some((item) => item.id === selectedMethod)) setSelectedMethod(available[0].id);
       } catch (error) { console.error("Checkout course error:", error); setMessage("Unable to load this course right now."); }
       finally { if (active) setLoading(false); }
     };
     load(); return () => { active = false; };
   }, [courseId]);
 
-  const price = Number(course?.price || 0); const oldPrice = Number(course?.oldPrice || 0); const isPaid = course?.isPaid === true || price > 0; const salePercent = oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0; const selected = methods.find((item) => item.id === selectedMethod) || methods[0];
+  const price = Number(course?.price || 0); const oldPrice = Number(course?.oldPrice || 0); const isPaid = course?.isPaid === true || price > 0; const salePercent = oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0; const selected = PAYMENT_METHOD;
 
   const startPayment = async () => {
     if (!user) { navigate(`/login?redirect=${encodeURIComponent(`/checkout?courseId=${courseId}`)}`); return; }
@@ -70,8 +62,8 @@ export default function Checkout() {
         <label className="mt-6 block text-sm font-black text-slate-800">Discount Code</label><div className="mt-2 flex gap-2"><div className="relative flex-1"><input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter coupon" className="w-full rounded-xl border border-slate-200 bg-white py-3 px-3 text-sm font-bold uppercase outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></div><span className="flex items-center gap-1 rounded-xl bg-blue-50 px-3 text-xs font-black text-blue-700"><BadgePercent size={15} /> Apply</span></div>
         <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 shrink-0 text-blue-600" size={20} /><div><p className="text-sm font-black text-slate-900">Real payment verification</p><p className="mt-1 text-xs leading-5 text-slate-600">You will be redirected to PayFast. The actual bank/wallet/card transaction is processed there. If the customer's account has insufficient balance, the gateway rejects the payment and the course stays locked.</p></div></div></div>
         {salePercent > 0 && <p className="mt-3 text-xs font-bold text-emerald-600">Course sale: {salePercent}% off</p>}{message && <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-sm font-semibold text-amber-800">{message}</div>}
-        <button type="button" onClick={startPayment} disabled={busy || !selected?.configured} className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 size={19} className="animate-spin" /> : <CreditCard size={19} />}{busy ? "Opening secure payment..." : `Pay ${money(summary.finalAmount)} securely`}</button>
-        {!selected?.configured && <p className="mt-3 text-center text-xs font-bold text-amber-700">Payment gateway is not configured yet. Add the PayFast merchant credentials in Vercel before accepting real payments.</p>}
+        <button type="button" onClick={startPayment} disabled={busy || !selected.configured} className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 size={19} className="animate-spin" /> : <CreditCard size={19} />}{busy ? "Opening secure payment..." : `Pay ${money(summary.finalAmount)} securely`}</button>
+        {!selected.configured && <p className="mt-3 text-center text-xs font-bold text-amber-700">Payment gateway is not configured yet. Add the PayFast merchant credentials in Vercel before accepting real payments.</p>}
         <div className="mt-5 grid gap-3 text-xs font-semibold text-slate-500 sm:grid-cols-2"><div className="flex items-center gap-2"><LockKeyhole size={16} className="text-emerald-600" /> Server-side order validation</div><div className="flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600" /> Gateway-verified payment</div></div><p className="mt-5 text-center text-[11px] leading-5 text-slate-400">Course access is granted only after the server confirms a successful PayFast transaction for the exact order amount.</p>
       </section>
     </div>
