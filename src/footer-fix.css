@@ -1,15 +1,25 @@
 /* Footer layout correction
-   The previous footer rules targeted the grid wrapper itself instead of
-   individual columns, which created the large boxed footer seen on mobile.
+   Preserve the existing footer structure/navigation while removing the old
+   boxed mobile treatment and applying a premium visual layer.
 */
 
 footer {
   width: 100%;
   max-width: 100%;
   overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(37,99,235,.16), transparent 32%),
+    radial-gradient(circle at 88% 15%, rgba(124,58,237,.14), transparent 30%),
+    #020617 !important;
 }
 
-/* The first direct child is the 4-column navigation grid. Keep it clean. */
+footer > div {
+  position: relative;
+  z-index: 1;
+}
+
+/* Keep the existing navigation grid clean — no oversized cards. */
 footer > div > div:first-child {
   position: static !important;
   margin: 0 !important;
@@ -28,29 +38,6 @@ footer > div > div:first-child::after {
   content: none !important;
 }
 
-/* Do not turn every footer link into a card. */
-footer > div > div:first-child a,
-footer > div > div:first-child button {
-  position: static !important;
-  min-height: 0 !important;
-  width: auto !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  transform: none;
-}
-
-footer > div > div:first-child a:hover,
-footer > div > div:first-child button:hover {
-  background: transparent !important;
-  box-shadow: none !important;
-  transform: translateX(3px);
-}
-
-/* Correct column styling. */
 footer > div > div:first-child > div {
   min-width: 0;
   background: transparent !important;
@@ -66,7 +53,55 @@ footer > div > div:first-child > div:not(:first-child) {
   padding: 0 !important;
 }
 
-/* Bottom copyright bar remains a simple divider, never a grid/card. */
+/* Brand area gets a subtle premium separation without changing its content. */
+footer > div > div:first-child > div:first-child img {
+  box-shadow: 0 10px 30px rgba(37,99,235,.22);
+}
+
+/* Do not turn footer links into cards. */
+footer > div > div:first-child a,
+footer > div > div:first-child button {
+  position: static !important;
+  min-height: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 3px 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none;
+  transition: color .2s ease, transform .2s ease, opacity .2s ease;
+}
+
+footer > div > div:first-child a:hover,
+footer > div > div:first-child button:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: translateX(4px);
+}
+
+/* Premium footer headings and links, while keeping the original wording. */
+footer > div > div:first-child > div:not(:first-child) p {
+  color: rgba(148,163,184,.82) !important;
+  letter-spacing: .12em;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+}
+
+footer > div > div:first-child > div:not(:first-child) a,
+footer > div > div:first-child > div:not(:first-child) button {
+  color: rgba(226,232,240,.88) !important;
+  font-weight: 600 !important;
+}
+
+footer > div > div:first-child > div:not(:first-child) a:hover,
+footer > div > div:first-child > div:not(:first-child) button:hover {
+  color: #fff !important;
+}
+
+/* Bottom copyright bar remains a simple premium divider, never a card. */
 footer > div > div:last-child {
   display: flex;
   align-items: center;
@@ -74,9 +109,33 @@ footer > div > div:last-child {
   width: 100%;
   margin-top: 32px !important;
   padding-top: 18px !important;
-  border-top: 1px solid rgba(255,255,255,.10) !important;
+  border-top: 1px solid rgba(148,163,184,.14) !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+/* Existing header: same navigation and controls, more polished finish. */
+header.sticky {
+  background: rgba(255,255,255,.92) !important;
+  border-bottom-color: rgba(148,163,184,.18) !important;
+  box-shadow: 0 10px 35px rgba(15,23,42,.07) !important;
+  backdrop-filter: blur(22px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(150%) !important;
+}
+
+header.sticky nav > a:first-child img {
+  box-shadow: 0 8px 22px rgba(37,99,235,.18);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+header.sticky nav > a:first-child:hover img {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(37,99,235,.25);
+}
+
+header.sticky nav a,
+header.sticky nav button {
+  transition: color .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
 
 @media (min-width: 1024px) {
