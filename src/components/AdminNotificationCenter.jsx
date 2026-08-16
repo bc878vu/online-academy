@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
 import { AlertCircle, Bell, CheckCircle2, Clock3, Mail, Send, X } from "lucide-react";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 
 const ADMIN_UID = "CDwCqUitlaSHEVeWQufCb0lXzMx1";
 const API_PATH = "/api/notifications";
@@ -87,7 +87,7 @@ export default function AdminNotificationCenter() {
     if (!admin) return undefined;
     previousPublished.current = new Map();
     initialized.current = false;
-    const unsubscribe = onSnapshot(collection(auth.app, "courses"), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, "courses"), (snapshot) => {
       const current = new Map(previousPublished.current);
       if (!initialized.current) {
         snapshot.docs.forEach((item) => current.set(item.id, item.data()?.published === true));
@@ -174,7 +174,7 @@ export default function AdminNotificationCenter() {
             <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Send to</span><select value={audience} onChange={(e) => setAudience(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500"><option value="all">All users</option><option value="paid">Paid users</option><option value="free">Free users</option></select></label>
             <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Subject</span><input required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. New notes uploaded" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
             <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Message / Notes</span><textarea required value={message} onChange={(e) => setMessage(e.target.value)} rows={5} placeholder="Write your announcement or share notes here..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-blue-500" /></label>
-            <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Optional link</span><input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
+            <label className="block"><span className="mb-2 block text-sm font-black text-slate-700">Optional link</span><input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..." className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
             {status.text && <div className={`flex items-start gap-2 rounded-xl border p-3 text-sm font-bold ${status.type === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{status.type === "ok" ? <CheckCircle2 size={18} /> : <Bell size={18} />}<span>{status.text}</span></div>}
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black">Close</button><button type="submit" disabled={sending} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white disabled:opacity-60">{sending ? "Sending..." : <><Send size={17} /> Send announcement</>}</button></div>
           </form>
