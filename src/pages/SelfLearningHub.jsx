@@ -1,0 +1,14 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { auth } from "../firebase";
+import { getGamificationProfile, getLevel, xpIntoLevel, XP_LEVEL_SIZE } from "../services/gamificationService";
+
+export default function SelfLearningHub() {
+  const [profile, setProfile] = useState(null);
+  useEffect(() => { const uid = auth.currentUser?.uid; if (uid) getGamificationProfile(uid).then(setProfile).catch(console.error); }, []);
+  const p = profile || { xp: 0, coins: 0, streak: 0, achievements: [] };
+  const progress = Math.round((xpIntoLevel(p.xp) / XP_LEVEL_SIZE) * 100);
+  const cards = [["/games", "🎮 Learning Games", "Practice through challenges"], ["/learning-path", "🎯 Learning Path", "Continue your journey"], ["/achievements", "🏆 Achievements", "Track badges and milestones"], ["/leaderboard", "🥇 Leaderboard", "See top learners"]];
+  return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8"><div className="mx-auto max-w-6xl space-y-6"><section className="rounded-3xl bg-gradient-to-br from-blue-700 to-indigo-700 p-6 text-white shadow-xl sm:p-8"><p className="text-sm font-bold text-blue-100">SELF LEARNING HUB</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Learn. Practice. Play. Progress.</h1><div className="mt-6 grid gap-3 sm:grid-cols-4"><Stat label="Level" value={getLevel(p.xp)} /><Stat label="XP" value={p.xp || 0} /><Stat label="Coins" value={p.coins || 0} /><Stat label="🔥 Streak" value={`${p.streak || 0} days`} /></div><div className="mt-6"><div className="mb-2 flex justify-between text-xs font-bold"><span>Level progress</span><span>{progress}%</span></div><div className="h-3 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} /></div></div></section><section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{cards.map(([to, title, text]) => <Link key={to} to={to} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><h2 className="font-black text-slate-900">{title}</h2><p className="mt-2 text-sm text-slate-500">{text}</p></Link>)}</section><section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-black text-slate-900">Your achievements</h2><p className="mt-1 text-sm text-slate-500">{(p.achievements || []).length} unlocked so far.</p><Link to="/achievements" className="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">View achievements</Link></section></div></main>;
+}
+function Stat({ label, value }) { return <div className="rounded-2xl bg-white/10 p-4 backdrop-blur"><p className="text-xs font-bold text-blue-100">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>; }
