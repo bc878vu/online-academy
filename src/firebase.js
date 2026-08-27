@@ -1,79 +1,36 @@
-// ======================================================
-// FIREBASE APP
-// ======================================================
-
 import { initializeApp } from "firebase/app";
-
-// ======================================================
-// FIREBASE AUTH
-// ======================================================
-
-import {
-  getAuth,
-  GoogleAuthProvider,
-  setPersistence,
-  browserLocalPersistence,
-} from "firebase/auth";
-
-// ======================================================
-// FIRESTORE
-// ======================================================
-
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
-
-// ======================================================
-// FIREBASE STORAGE
-// ======================================================
-
 import { getStorage } from "firebase/storage";
 
+// Support both naming conventions used by Vercel/Vite deployments.
+// VITE_* variables are replaced at build time, so the correct environment
+// scope (Production/Preview) must be selected before deploying.
+const env = import.meta.env;
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: env.VITE_FIREBASE_API_KEY || env.VITE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || env.VITE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || env.VITE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || env.VITE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || env.VITE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID || env.VITE_APP_ID,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || env.VITE_MEASUREMENT_ID,
 };
 
-const requiredFirebaseConfig = {
-  apiKey: firebaseConfig.apiKey,
-  authDomain: firebaseConfig.authDomain,
-  projectId: firebaseConfig.projectId,
-  storageBucket: firebaseConfig.storageBucket,
-  messagingSenderId: firebaseConfig.messagingSenderId,
-  appId: firebaseConfig.appId,
-};
-
-const missingFirebaseConfig = Object.entries(requiredFirebaseConfig)
-  .filter(([, value]) => !value)
-  .map(([key]) => key);
-
-if (missingFirebaseConfig.length > 0) {
-  throw new Error(
-    `Missing Firebase environment variables: ${missingFirebaseConfig.join(", ")}`
-  );
+const required = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
+const missing = required.filter((key) => !firebaseConfig[key]);
+if (missing.length) {
+  throw new Error(`Missing Firebase environment variables: ${missing.join(", ")}`);
 }
 
 const app = initializeApp(firebaseConfig);
-
-// Keep authentication persistence explicit. This was the stable configuration
-// used before the recent admin/authentication updates and avoids auth-session
-// regressions across page reloads and popup sign-in flows.
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.error("Firebase persistence setup failed:", error);
 });
 
-// Memory cache avoids fragile IndexedDB startup/visibility races while still
-// preventing repeated reads during the current page session.
-export const db = initializeFirestore(app, {
-  localCache: memoryLocalCache(),
-});
-
+export const db = initializeFirestore(app, { localCache: memoryLocalCache() });
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
-
 export const storage = getStorage(app);
 export default app;
