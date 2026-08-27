@@ -1,0 +1,4 @@
+import { useEffect, useState } from "react";
+import { auth } from "../firebase";
+import { getGamificationProfile, getLevel } from "../services/gamificationService";
+export default function Leaderboard(){const[p,setP]=useState(null);useEffect(()=>{if(auth.currentUser?.uid)getGamificationProfile(auth.currentUser.uid).then(setP)},[]);return <main className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-3xl"><h1 className="text-3xl font-black">🥇 Learning Rank</h1><p className="mt-2 text-slate-500">Your personal standing is ready. A global leaderboard can be enabled later with secure server-side aggregation.</p><section className="mt-6 rounded-3xl border bg-white p-8 shadow-sm"><div className="text-5xl">⭐</div><h2 className="mt-4 text-2xl font-black">Level {getLevel(p?.xp || 0)}</h2><p className="mt-2 text-slate-500">{p?.xp || 0} XP · {p?.coins || 0} coins · 🔥 {p?.streak || 0} day streak</p></section></div></main>}
