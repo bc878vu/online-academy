@@ -58,16 +58,11 @@ if (missingFirebaseConfig.length > 0) {
 
 const app = initializeApp(firebaseConfig);
 
-// Keep authentication persistence explicit. This was the stable configuration
-// used before the recent admin/authentication updates and avoids auth-session
-// regressions across page reloads and popup sign-in flows.
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch((error) => {
   console.error("Firebase persistence setup failed:", error);
 });
 
-// Memory cache avoids fragile IndexedDB startup/visibility races while still
-// preventing repeated reads during the current page session.
 export const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
 });
